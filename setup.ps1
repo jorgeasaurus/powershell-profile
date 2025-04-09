@@ -82,7 +82,7 @@ if (!(Test-Path -Path $PROFILE -PathType Leaf)) {
             New-Item -Path $profileDir -ItemType "directory"
         }
 
-        Invoke-RestMethod https://github.com/ChrisTitusTech/powershell-profile/raw/main/Microsoft.PowerShell_profile.ps1 -OutFile $PROFILE
+        Invoke-RestMethod https://github.com/jorgeasaurus/powershell-profile/raw/main/Microsoft.PowerShell_profile.ps1 -OutFile $PROFILE
         Write-Host "The profile @ [$PROFILE] has been created."
         Write-Host "If you want to make personal customizations, please edit the file in [$profileDir]."
     } catch {
@@ -91,7 +91,7 @@ if (!(Test-Path -Path $PROFILE -PathType Leaf)) {
 } else {
     try {
         Get-Item -Path $PROFILE | Move-Item -Destination "oldprofile.ps1" -Force
-        Invoke-RestMethod https://github.com/ChrisTitusTech/powershell-profile/raw/main/Microsoft.PowerShell_profile.ps1 -OutFile $PROFILE
+        Invoke-RestMethod https://github.com/jorgeasaurus/powershell-profile/raw/main/Microsoft.PowerShell_profile.ps1 -OutFile $PROFILE
         Write-Host "The profile @ [$PROFILE] has been created and the old profile moved to oldprofile.ps1."
         Write-Host "Please back up any persistent components from the old profile in [$HOME/Documents/PowerShell] if needed."
     } catch {
