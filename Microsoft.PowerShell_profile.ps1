@@ -238,7 +238,7 @@ Set-Alias -Name vim -Value $EDITOR
 
 # Quick Access to Editing the Profile
 function Edit-Profile {
-    vim $PROFILE.CurrentUserAllHosts
+    code $PROFILE
 }
 Set-Alias -Name ep -Value Edit-Profile
 
