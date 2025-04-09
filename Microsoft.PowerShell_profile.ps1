@@ -582,16 +582,12 @@ Register-ArgumentCompleter -Native -CommandName dotnet -ScriptBlock $scriptblock
 
 # Get theme from profile.ps1 or use a default theme
 function Get-Theme {
-    if (Test-Path -Path $PROFILE -PathType leaf) {
-        $existingTheme = Select-String -Raw -Path $PROFILE -Pattern "oh-my-posh init pwsh --config" | Select-Object -Last 1
-        if ($null -ne $existingTheme) {
-            Invoke-Expression $existingTheme
-            return
-        }
-        & oh-my-posh init pwsh --config https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_rainbow.omp.json | Invoke-Expression
-    } else {
-        & oh-my-posh init pwsh --config https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_rainbow.omp.json | Invoke-Expression
-    }
+    if ($isMacOS) {
+        $OhMyPoshCommand = "/opt/homebrew/bin/oh-my-posh"
+    } elseif ($IsWindows) {
+        $OhMyPoshCommand = (Get-Command -Name 'oh-my-posh.exe' -ea 0).Source
+    }       
+    & $OhMyPoshCommand --init pwsh --config https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_rainbow.omp.json | Invoke-Expression
 }
 
 ## Final Line to set prompt
