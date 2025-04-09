@@ -501,7 +501,10 @@ if (-not (Get-Variable -Name Onedrive -ErrorAction SilentlyContinue)) {
 # Enhanced PowerShell Experience
 # Enhanced PSReadLine Configuration
 # Import PSReadLine module
-Import-Module PSReadLine -ErrorAction SilentlyContinue
+try { Import-Module PSReadLine }
+catch {
+    Write-Warning "$_"
+}
 
 $PSReadLineOptions = @{
     EditMode                      = 'Windows'
