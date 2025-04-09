@@ -3,9 +3,6 @@
 
 $debug = $false
 
-# Define the path to the file that stores the last execution time
-$timeFilePath = "$env:USERPROFILE\Documents\PowerShell\LastExecutionTime.txt"
-
 # Define the update interval in days, set to -1 to always check
 $updateInterval = 7
 
@@ -54,8 +51,12 @@ if ($IsWindows) {
 
 } else {
     $OhMyPoshConfig = $Config.OhMyPosh.Unix.Theme
+    $env:USERPROFILE = $HOME
     Write-Host "✅ PowerShell on Mac - PSVersion $($PSVersionTable.PSVersion)" -ForegroundColor Green
 }
+
+# Define the path to the file that stores the last execution time
+$timeFilePath = "$env:USERPROFILE\Documents\PowerShell\LastExecutionTime.txt"
 
 # Initial GitHub.com connectivity check with 1 second timeout
 $global:canConnectToGitHub = Test-Connection github.com -Count 1 -Quiet -TimeoutSeconds 1
