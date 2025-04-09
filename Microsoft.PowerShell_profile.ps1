@@ -105,7 +105,7 @@ if (-not $debug -and `
 
     Update-Profile
     $currentTime = Get-Date -Format 'yyyy-MM-dd'
-    $currentTime | Out-File -FilePath $timeFilePath
+    $currentTime | Out-File -FilePath $timeFilePath -Force
 
 } elseif (-not $debug) {
     Write-Warning "Profile update skipped. Last update check was within the last $updateInterval day(s)."
@@ -156,7 +156,7 @@ if (-not $debug -and `
 
     Update-PowerShell
     $currentTime = Get-Date -Format 'yyyy-MM-dd'
-    $currentTime | Out-File -FilePath $timeFilePath
+    $currentTime | Out-File -FilePath $timeFilePath -Force
 } elseif (-not $debug) {
     Write-Warning "PowerShell update skipped. Last update check was within the last $updateInterval day(s)."
 } else {
@@ -582,15 +582,15 @@ Register-ArgumentCompleter -Native -CommandName dotnet -ScriptBlock $scriptblock
 
 # Get theme from profile.ps1 or use a default theme
 function Get-Theme {
-    if (Test-Path -Path $PROFILE.CurrentUserAllHosts -PathType leaf) {
-        $existingTheme = Select-String -Raw -Path $PROFILE.CurrentUserAllHosts -Pattern "oh-my-posh init pwsh --config"
+    if (Test-Path -Path $PROFILE -PathType leaf) {
+        $existingTheme = Select-String -Raw -Path $PROFILE -Pattern "oh-my-posh init pwsh --config" | Select-Object -Last 1
         if ($null -ne $existingTheme) {
             Invoke-Expression $existingTheme
             return
         }
-        oh-my-posh init pwsh --config https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_rainbow.omp.json | Invoke-Expression
+        & oh-my-posh init pwsh --config https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_rainbow.omp.json | Invoke-Expression
     } else {
-        oh-my-posh init pwsh --config https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_rainbow.omp.json | Invoke-Expression
+        & oh-my-posh init pwsh --config https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_rainbow.omp.json | Invoke-Expression
     }
 }
 
