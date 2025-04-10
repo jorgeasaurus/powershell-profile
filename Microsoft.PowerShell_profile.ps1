@@ -592,7 +592,7 @@ function Get-Theme {
 
 # Check and install Homebrew on macOS
 if ($IsMacOS) {
-    if (-not (Get-Command brew -ErrorAction SilentlyContinue)) {
+    if (-not (Test-Path /opt/homebrew/bin)) {
         Write-Host "Homebrew not found. Installing Homebrew..." -ForegroundColor Yellow
         try {
             bash -c '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
@@ -603,17 +603,16 @@ if ($IsMacOS) {
             }
             
             Write-Host "Homebrew installed successfully!" -ForegroundColor Green
-        }
-        catch {
+        } catch {
             Write-Error "Failed to install Homebrew: $_"
         }
-    }
-    else {
+    } else {
         # Ensure Homebrew is in PATH
         $homebrewPath = "/opt/homebrew/bin"
         if ($env:PATH -notlike "*$homebrewPath*") {
             $env:PATH = "${$homebrewPath}:$env:PATH"
         }
+        Set-Alias brew /opt/homebrew/bin/brew
     }
 }
 
@@ -621,6 +620,8 @@ if ($IsMacOS) {
 Get-Theme
 if (Get-Command zoxide -ErrorAction SilentlyContinue) {
     Invoke-Expression (& { (zoxide init --cmd cd powershell | Out-String) })
+} elseif (Test-Path /opt/homebrew/bin/zoxide) {
+    Invoke-Expression (& { (/opt/homebrew/bin/zoxide init --cmd cd powershell | Out-String) })
 } else {
     if ($IsWindows) {
         Write-Host "zoxide command not found. Attempting to install via winget..."
@@ -634,11 +635,11 @@ if (Get-Command zoxide -ErrorAction SilentlyContinue) {
     } elseif ($IsMacOS) {
         Write-Host "zoxide command not found. Attempting to install via Homebrew..."
         try {
-            if (!(Get-Command brew -ErrorAction SilentlyContinue)) {
+            if (!(Test-Path "/opt/homebrew/bin/brew" -ErrorAction SilentlyContinue)) {
                 Write-Error "Homebrew is not installed. Please install Homebrew first."
                 return
             }
-            brew install zoxide
+            /opt/homebrew/bin/brew install zoxide
             Write-Host "zoxide installed successfully. Initializing..."
             Invoke-Expression (& { (zoxide init powershell | Out-String) })
         } catch {
