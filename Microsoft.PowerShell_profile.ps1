@@ -219,22 +219,6 @@ function Clear-Cache {
 
 
 # Utility Functions
-function Test-CommandExists {
-    param($command)
-    $exists = $null -ne (Get-Command $command -ErrorAction SilentlyContinue)
-    return $exists
-}
-
-# Editor Configuration
-$EDITOR = if (Test-CommandExists nvim) { 'nvim' }
-elseif (Test-CommandExists pvim) { 'pvim' }
-elseif (Test-CommandExists vim) { 'vim' }
-elseif (Test-CommandExists vi) { 'vi' }
-elseif (Test-CommandExists code) { 'code' }
-elseif (Test-CommandExists notepad++) { 'notepad++' }
-elseif (Test-CommandExists sublime_text) { 'sublime_text' }
-else { 'notepad' }
-Set-Alias -Name vim -Value $EDITOR
 
 # Quick Access to Editing the Profile
 function Edit-Profile {
@@ -654,7 +638,7 @@ if (Get-Command zoxide -ErrorAction SilentlyContinue) {
 
 function Test-CommandExists {
     param ([string]$command)
-    try { return (Get-Command $command -ErrorAction Stop) -ne $null } catch { return $false }
+    try { return $null -ne (Get-Command $command -ErrorAction Stop) } catch { return $false }
 }
 
 # Generic font detection that defers to platform-specific functions
