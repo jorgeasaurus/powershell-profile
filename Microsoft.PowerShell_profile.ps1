@@ -468,8 +468,6 @@ function gc { param($m) git commit -m "$m" }
 
 function gp { git push }
 
-function g { __zoxide_z github }
-
 function gcl { git clone "$args" }
 
 function gcom {
@@ -697,9 +695,6 @@ function Test-MacFont {
     }
     return $false
 }
-
-Set-Alias -Name z -Value __zoxide_z -Option AllScope -Scope Global -Force
-Set-Alias -Name zi -Value __zoxide_zi -Option AllScope -Scope Global -Force
 
 # Help Function
 function Show-Help {
