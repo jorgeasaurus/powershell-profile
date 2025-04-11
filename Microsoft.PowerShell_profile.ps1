@@ -502,9 +502,11 @@ if (-not (Get-Variable -Name Onedrive -ErrorAction SilentlyContinue)) {
 # Enhanced PowerShell Experience
 # Enhanced PSReadLine Configuration
 # Import PSReadLine module
-try { Import-Module PSReadLine }
-catch {
-    Write-Warning "$_"
+if ($IsWindows) {
+    try { Import-Module PSReadLine }
+    catch {
+        Write-Warning "$_"
+    }
 }
 
 $PSReadLineOptions = @{
