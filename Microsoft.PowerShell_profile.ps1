@@ -604,37 +604,6 @@ if ($IsMacOS) {
 
 ## Final Line to set prompt
 Get-Theme
-if (Get-Command zoxide -ErrorAction SilentlyContinue) {
-    Invoke-Expression (& { (zoxide init --cmd cd powershell | Out-String) })
-} elseif (Test-Path /opt/homebrew/bin/zoxide) {
-    Invoke-Expression (& { (/opt/homebrew/bin/zoxide init --cmd cd powershell | Out-String) })
-} else {
-    if ($IsWindows) {
-        Write-Host "zoxide command not found. Attempting to install via winget..."
-        try {
-            winget install -e --id ajeetdsouza.zoxide
-            Write-Host "zoxide installed successfully. Initializing..."
-            Invoke-Expression (& { (zoxide init powershell | Out-String) })
-        } catch {
-            Write-Error "Failed to install zoxide via winget. Error: $_"
-        }
-    } elseif ($IsMacOS) {
-        Write-Host "zoxide command not found. Attempting to install via Homebrew..."
-        try {
-            if (!(Test-Path "/opt/homebrew/bin/brew" -ErrorAction SilentlyContinue)) {
-                Write-Error "Homebrew is not installed. Please install Homebrew first."
-                return
-            }
-            /opt/homebrew/bin/brew install zoxide
-            Write-Host "zoxide installed successfully. Initializing..."
-            Invoke-Expression (& { (zoxide init powershell | Out-String) })
-        } catch {
-            Write-Error "Failed to install zoxide via Homebrew. Error: $_"
-        }
-    } else {
-        Write-Error "Unsupported operating system. Please install zoxide manually."
-    }
-}
 
 function Test-CommandExists {
     param ([string]$command)
