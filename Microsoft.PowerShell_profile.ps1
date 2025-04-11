@@ -585,7 +585,7 @@ if ($IsMacOS) {
             # Add Homebrew to PATH
             $homebrewPath = "/opt/homebrew/bin"
             if ($env:PATH -notlike "*$homebrewPath*") {
-                $env:PATH = "${$homebrewPath}:$env:PATH"
+                $env:PATH = "$homebrewPath" + ":" + "$env:PATH"
             }
             
             Write-Host "Homebrew installed successfully!" -ForegroundColor Green
@@ -596,9 +596,10 @@ if ($IsMacOS) {
         # Ensure Homebrew is in PATH
         $homebrewPath = "/opt/homebrew/bin"
         if ($env:PATH -notlike "*$homebrewPath*") {
-            $env:PATH = "${$homebrewPath}:$env:PATH"
+            $env:PATH = "$homebrewPath" + ":" + "$env:PATH"
         }
         Set-Alias brew /opt/homebrew/bin/brew
+        Write-Host "Homebrew found at $homebrewPath" -ForegroundColor Green
     }
 }
 
