@@ -495,7 +495,7 @@ function cpy { Set-Clipboard $args[0] }
 function pst { Get-Clipboard }
 
 # Ensure $Onedrive variable is defined (if not, set it)
-if (-not (Get-Variable -Name Onedrive -ErrorAction SilentlyContinue)) {
+if (-not ($Onedrive)) {
     Set-Variable -Name Onedrive -Value "$UserProfile\OneDrive" -Scope Global
 }
 
