@@ -61,7 +61,7 @@ function Install-NerdFonts {
             }
         } elseif ($IsMacOS) {
             # Use Homebrew to install the correct Nerd Font cask for macOS
-            brew install --cask font-cascadia-code-nf
+            /opt/homebrew/bin/brew install --cask font-cascadia-code-nf
             Write-Host "✅ font-cascadia-code-nf installed."
         }
     } catch {
@@ -108,7 +108,7 @@ if ($IsWindows) {
     }
 } elseif ($IsMacOS) {
     try {
-        brew install oh-my-posh
+        /opt/homebrew/bin/brew install oh-my-posh
         Write-Host "Oh My Posh installed successfully."
     } catch {
         Write-Error "Failed to install Oh My Posh on macOS. Error: $_"
@@ -169,7 +169,7 @@ if ($IsWindows) {
     }
 } elseif ($IsMacOS) {
     try {
-        brew install zoxide
+        /opt/homebrew/bin/brew install zoxide
         Write-Host "zoxide installed successfully on macOS."
     } catch {
         Write-Error "Failed to install zoxide on macOS. Error: $_"
