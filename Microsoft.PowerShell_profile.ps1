@@ -377,8 +377,10 @@ function sed($file, $find, $replace) {
     (Get-Content $file).replace("$find", $replace) | Set-Content $file
 }
 
-function which($name) {
-    Get-Command $name | Select-Object -ExpandProperty Definition
+if ($IsWindows) {
+    function which($name) {
+        Get-Command $name | Select-Object -ExpandProperty Definition
+    }
 }
 
 function export($name, $value) {
