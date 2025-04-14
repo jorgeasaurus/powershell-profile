@@ -57,6 +57,12 @@ if ($IsWindows) {
 
 # Define the path to the file that stores the last execution time
 $timeFilePath = "$env:USERPROFILE\Documents\PowerShell\LastExecutionTime.txt"
+if (-not (Test-Path $timeFilePath)) {
+    # Create the file if it doesn't exist
+    New-Item -Path $timeFilePath -ItemType File -Force | Out-Null
+    $currentTime = Get-Date -Format 'yyyy-MM-dd'
+    $currentTime | Out-File -FilePath $timeFilePath -Force
+}
 
 # Initial GitHub.com connectivity check with 1 second timeout
 $global:canConnectToGitHub = Test-Connection github.com -Count 1 -Quiet -TimeoutSeconds 1
@@ -276,7 +282,7 @@ function uptime {
             } elseif ($lastBootStr -match '^\d{2}\.\d{2}\.\d{4}') {
                 $dateFormat = 'dd.MM.yyyy'
             }
-            
+
             # check time format
             if ($lastBootStr -match '\bAM\b' -or $lastBootStr -match '\bPM\b') {
                 $timeFormat = 'h:mm:ss tt'
@@ -303,7 +309,7 @@ function uptime {
 
         # Uptime output
         Write-Host ("Uptime: {0} days, {1} hours, {2} minutes, {3} seconds" -f $days, $hours, $minutes, $seconds) -ForegroundColor Blue
-        
+
 
     } catch {
         Write-Error "An error occurred while retrieving system uptime."
@@ -324,16 +330,16 @@ function hb {
         Write-Error "No file path specified."
         return
     }
-    
+
     $FilePath = $args[0]
-    
+
     if (Test-Path $FilePath) {
         $Content = Get-Content $FilePath -Raw
     } else {
         Write-Error "File path does not exist."
         return
     }
-    
+
     $uri = "http://bin.christitus.com/documents"
     try {
         $response = Invoke-RestMethod -Uri $uri -Method Post -Body $Content -ErrorAction Stop
@@ -426,12 +432,12 @@ function trash($path) {
 ### Quality of Life Aliases
 
 # Navigation Shortcuts
-function docs { 
+function docs {
     $docs = if (([Environment]::GetFolderPath("MyDocuments"))) { ([Environment]::GetFolderPath("MyDocuments")) } else { $HOME + "\Documents" }
     Set-Location -Path $docs
 }
-    
-function dtop { 
+
+function dtop {
     $dtop = if ([Environment]::GetFolderPath("Desktop")) { [Environment]::GetFolderPath("Desktop") } else { $HOME + "\Documents" }
     Set-Location -Path $dtop
 }
@@ -547,7 +553,7 @@ $scriptblock = {
         'npm'  = @('install', 'start', 'run', 'test', 'build')
         'deno' = @('run', 'compile', 'bundle', 'test', 'lint', 'fmt', 'cache', 'info', 'doc', 'upgrade')
     }
-    
+
     $command = $commandAst.CommandElements[0].Value
     if ($customCompletions.ContainsKey($command)) {
         $customCompletions[$command] | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
@@ -572,7 +578,7 @@ function Get-Theme {
         $OhMyPoshCommand = "/opt/homebrew/bin/oh-my-posh"
     } elseif ($IsWindows) {
         $OhMyPoshCommand = (Get-Command -Name 'oh-my-posh.exe' -ea 0).Source
-    }       
+    }
     & $OhMyPoshCommand --init --config https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_rainbow.omp.json | Invoke-Expression
 }
 
@@ -587,7 +593,7 @@ if ($IsMacOS) {
             if ($env:PATH -notlike "*$homebrewPath*") {
                 $env:PATH = "$homebrewPath" + ":" + "$env:PATH"
             }
-            
+
             Write-Host "Homebrew installed successfully!" -ForegroundColor Green
         } catch {
             Write-Error "Failed to install Homebrew: $_"
