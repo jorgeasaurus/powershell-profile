@@ -202,7 +202,7 @@ function Clear-Cache {
 
         # Clear User Cache
         Write-Host "Clearing User Cache..." -ForegroundColor Yellow
-        rm -rf ~/Library/Caches/* 2>$null
+        Remove-Item -rf ~/Library/Caches/* 2>$null
 
         # Clear DNS Cache
         Write-Host "Clearing DNS Cache..." -ForegroundColor Yellow
@@ -360,7 +360,7 @@ function grep($regex, $dir) {
 }
 
 function df {
-    get-volume
+    Get-Volume
 }
 
 function sed($file, $find, $replace) {
@@ -754,3 +754,48 @@ if (Test-Path "$PSScriptRoot\CTTcustom.ps1") {
 }
 
 Write-Host "$($PSStyle.Foreground.Yellow)Use 'Show-Help' to display help$($PSStyle.Reset)"
+
+function Invoke-Spongebob {
+    [cmdletbinding()]
+    param(
+        [Parameter(HelpMessage = "provide string" , Mandatory = $true)]
+        [string]$Message
+    )
+    $charArray = $Message.ToCharArray()
+
+    foreach ($char in $charArray) {
+        $Var = $(Get-Random) % 2
+        if ($var -eq 0) {
+            $string = $char.ToString()
+            $Upper = $string.ToUpper()
+            $output = $output + $Upper
+        } else {
+            $lower = $char.ToString()
+            $output = $output + $lower
+        }
+    }
+    $output
+    $output = $null
+}
+function yt {
+
+    Begin {
+        $query = 'https://www.youtube.com/results?search_query='
+    }
+    Process {
+        Write-Host $args.Count, "Arguments detected"
+        "Parsing out Arguments: $args"
+        for ($i = 0; $i -le $args.Count; $i++) {
+            $args | ForEach-Object { "Arg $i `t $_ `t Length `t" + $_.Length, " characters"; $i++ }
+        }
+
+        $args | ForEach-Object { $query = $query + "$_+" }
+        $url = "$query"
+    }
+    End {
+        $url.Substring(0, $url.Length - 1)
+        "Final Search will be $url"
+        "Invoking..."
+        Start-Process "$url"
+    }
+}
