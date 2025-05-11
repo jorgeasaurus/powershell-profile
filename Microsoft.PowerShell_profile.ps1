@@ -36,7 +36,13 @@ if ($debug) {
 #################################################################################################################################
 
 $UserProfile = $HOME
-$ConfigPath = Join-Path $UserProfile "pwsh_custom_config.json"
+# Ensure $Onedrive variable is defined (if not, set it)
+
+if (Test-Path ~/Library/CloudStorage/OneDrive-Personal) {
+    Set-Variable -Name Onedrive -Value "~/Library/CloudStorage/OneDrive-Personal" -Scope Global
+} else {
+    Set-Variable -Name Onedrive -Value "$UserProfile/OneDrive" -Scope Global
+}
 
 # Set the Oh My Posh theme based on platform
 if ($IsWindows) {
@@ -484,11 +490,6 @@ function cpy { Set-Clipboard $args[0] }
 
 function pst { Get-Clipboard }
 
-# Ensure $Onedrive variable is defined (if not, set it)
-if (-not ($Onedrive)) {
-    Set-Variable -Name Onedrive -Value "$UserProfile\OneDrive" -Scope Global
-}
-
 # Enhanced PowerShell Experience
 # Enhanced PSReadLine Configuration
 # Import PSReadLine module
@@ -798,4 +799,16 @@ function yt {
         "Invoking..."
         Start-Process "$url"
     }
+}
+
+# Splat parameters for Join-Path
+$joinParams = @{
+    Path              = $Onedrive
+    ChildPath         = '10-19 Personal Projects/14 Scripts/14.01 Configs'
+    AdditionalChildPath = 'PsAiConfig.ps1'
+}
+$envPath = Join-Path @joinParams
+if (Test-Path $envPath) {
+    . $envPath
+    Write-Host "PSAI Env Config file loaded." -ForegroundColor Green
 }
