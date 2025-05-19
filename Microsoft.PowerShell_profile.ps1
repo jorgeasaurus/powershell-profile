@@ -812,3 +812,179 @@ if (Test-Path $envPath) {
     . $envPath
     Write-Host "PSAI Env Config file loaded." -ForegroundColor Green
 }
+
+function Get-InstalledModuleFast {
+	param(
+		#Modules to filter for. Wildcards are supported.
+		[string]$Name,
+		#Path(s) to search for modules. Defaults to your PSModulePath paths
+		[string[]]$ModulePath = ($env:PSModulePath -split [System.IO.Path]::PathSeparator),
+		#Return all installed modules and not just the latest versions
+		[switch]$All
+	)
+
+	$allModules = foreach ($pathItem in $ModulePath) {
+		#Skip paths that don't exist
+		if (-not (Test-Path $pathItem)) { continue }
+
+		Get-ChildItem -Path $pathItem -Filter "*.psd1" -Recurse -ErrorAction SilentlyContinue
+		| Foreach-Object {
+			$manifestPath = $_
+			$manifestName = (Split-Path -ea 0 $_ -Leaf) -replace "\.psd1$"
+			if ($Name -and $ManifestName -notlike $Name) { return }
+			$versionPath = Split-Path -ea 0 $_
+			[Version]$versionRoot = ( $versionPath | Split-Path -ea 0 -Leaf) -as [Version]
+
+			if (-not $versionRoot) {
+				# Try for a non-versioned module by resetting the search
+				$versionPath = $_
+			}
+
+			$moduleRootName = (Split-Path -ea 0 $versionPath | Split-Path -ea 0 -Leaf)
+			if ($moduleRootName -ne $manifestName) {
+				Write-Verbose "$manifestPath doesnt match a module folder, not a module manifest. skipping..."
+				return
+			}
+
+			try {
+				$fullInfo = Import-PowerShellDataFile -Path $_ -Ea Stop
+			}
+			catch {
+				Write-Warning "Failed to import module manifest for $manifestPath. Skipping for now..."
+				return
+			}
+
+			if (-not $fullInfo) { return }
+			$manifestVersion = $fullInfo.ModuleVersion -as [Version]
+			if (-not $manifestVersion) { Write-Warning "$manifestPath has an invalid or missing ModuleVersion in the manifest. You should fix this. Skipping for now..."; return }
+
+			if ($versionRoot -and $versionRoot -ne $manifestVersion) { Write-Warning "$_ has a different version in the manifest ($manifestVersion) than the folder name ($versionRoot). You should fix this. Skipping for now..."; return }
+
+			#Add prerelease info if present
+			if ($fullInfo.PrivateData.PSData.Prerelease) {
+				$manifestVersion = [Management.Automation.SemanticVersion]"$manifestVersion-$($fullInfo.PrivateData.PSData.Prerelease)"
+			}
+
+			[PSCustomObject][ordered]@{
+				Name = $moduleRootName
+				Version = $manifestVersion
+				Path = $_.FullName
+			}
+		}
+	}
+
+	$modulesProcessed = @{}
+
+	$allModules
+	| Sort-Object -Property Name, @{Expression='Version';Descending=$true}
+	| ForEach-Object {
+		if ($All) {return $_}
+		if (-not $modulesProcessed.($_.Name)) {
+			$modulesProcessed.($_.Name) = $true
+			return $_
+		}
+	}
+}
+
+function Update-Modules {
+    param (
+        [switch]$AllowPrerelease, # Include prerelease versions in updates
+        [string]$Name = '*', # Module name filter, '*' for all modules
+        [switch]$WhatIf, # Preview changes without applying them
+        [int]$ThrottleLimit = 5   # Control parallel execution limit
+    )
+    
+    # Initialize by getting all installed modules matching the name filter
+    Write-Host ("Retrieving all installed modules ...") -ForegroundColor Green
+    [array]$CurrentModules = Get-InstalledModuleFast -Name $Name -ErrorAction SilentlyContinue | 
+    Select-Object Name, Version | 
+    Sort-Object Name
+
+    # Exit if no modules are found
+    if (-not $CurrentModules) {
+        Write-Host ("No modules found.") -ForegroundColor Gray
+        return
+    }
+    
+    # Display initial status
+    Write-Host ("{0} modules found." -f $CurrentModules.Count) -ForegroundColor Gray
+    Write-Host ("Updating installed modules to the latest {0} version ..." -f $(if ($AllowPrerelease) { "PreRelease" } else { "Production" })) -ForegroundColor Green
+
+    # Store original versions for comparison in summary
+    $script:OldVersions = @{}
+    foreach ($Module in $CurrentModules) {
+        $script:OldVersions[$Module.Name] = $Module.Version
+    }
+
+    # Process updates in parallel for better performance
+    $CurrentModules | ForEach-Object -Parallel {
+        $Module = $_
+        $AllowPrerelease = $using:AllowPrerelease
+        $WhatIf = $using:WhatIf
+        
+        try {
+            # Find the latest available version
+            $findParams = @{
+                Name            = $Module.Name
+                AllowPrerelease = $AllowPrerelease
+                ErrorAction     = 'Stop'
+            }
+            
+            $latest = Find-Module @findParams | Select-Object -First 1
+            
+            # Update only if a newer version is available
+            if ($latest.Version -and $Module.Version -and ([version]$latest.Version -gt [version]$Module.Version)) {
+                $updateParams = @{
+                    Name            = $Module.Name
+                    AllowPrerelease = $AllowPrerelease
+                    AcceptLicense   = $true
+                    Force           = $true
+                    WhatIf          = $WhatIf
+                    ErrorAction     = 'Stop'
+                }
+                
+                Update-Module @updateParams
+                Write-Host ("Updated {0} from version {1} to {2}" -f $Module.Name, $Module.Version, $latest.Version) -ForegroundColor Yellow
+                
+                # Remove older versions to save disk space
+                if (-not $WhatIf) {
+                    $AllVersions = Get-InstalledModule -Name $Module.Name -AllVersions | Sort-Object PublishedDate -Descending
+                    foreach ($Version in $AllVersions | Select-Object -Skip 1) {
+                        try {
+                            Uninstall-Module -Name $Module.Name -RequiredVersion $Version.Version -Force -ErrorAction Stop
+                            Write-Host ("Uninstalled older version {0} of {1}" -f $Version.Version, $Module.Name) -ForegroundColor Gray
+                        } catch {
+                            Write-Warning ("Failed to uninstall version {0} of {1}: {2}" -f $Version.Version, $Module.Name, $_.Exception.Message)
+                        }
+                    }
+                }
+            } else {
+                Write-Host ("{0} is up to date (version {1})" -f $Module.Name, $Module.Version) -ForegroundColor Cyan
+            }
+        } catch {
+            Write-Warning ("{0}: {1}" -f $Module.Name, $_.Exception.Message)
+        }
+    } -ThrottleLimit $ThrottleLimit
+
+    # Generate summary report of all updates
+    if (-not $WhatIf) {
+        $NewModules = Get-InstalledModule -Name $Name -ErrorAction SilentlyContinue | 
+        Select-Object Name, Version | 
+        Sort-Object Name
+
+        # Compare new versions with original versions
+        $UpdatedModules = $NewModules | Where-Object { 
+            $script:OldVersions[$_.Name] -ne $_.Version 
+        }
+        
+        # Display summary of changes
+        if ($UpdatedModules) {
+            Write-Host "`nUpdated modules:" -ForegroundColor Green
+            foreach ($Module in $UpdatedModules) {
+                Write-Host ("- {0}: {1} -> {2}" -f $Module.Name, $script:OldVersions[$Module.Name], $Module.Version) -ForegroundColor Green
+            }
+        } else {
+            Write-Host "`nNo modules were updated." -ForegroundColor Gray
+        }
+    }
+}
