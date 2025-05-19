@@ -988,3 +988,59 @@ function Update-Modules {
         }
     }
 }
+
+function Show-Tree {
+    [CmdletBinding(DefaultParameterSetName='Dirs')]
+    param(
+        [Parameter(Position=0)]
+        [string]$Path = '.',
+
+        [Parameter(Position=1)]
+        [int]$Depth = [int]::MaxValue,
+
+        [Parameter(ParameterSetName='Files')]
+        [switch]$ShowFiles
+    )
+
+    begin {
+        try {
+            $rootItem = Get-Item -LiteralPath $Path -ErrorAction Stop
+        }
+        catch {
+            Write-Error "Path not found: $Path"
+            return
+        }
+
+        function Invoke-Tree {
+            param(
+                [IO.FileSystemInfo]$Item,
+                [string]$Prefix       = '',
+                [int]   $CurrentDepth = 1
+            )
+
+            if ($CurrentDepth -gt $Depth) { return }
+
+            $children = Get-ChildItem -LiteralPath $Item.FullName -Force -ErrorAction SilentlyContinue |
+                        Where-Object { $ShowFiles.IsPresent -or $_.PSIsContainer }
+
+            for ($i = 0; $i -lt $children.Count; $i++) {
+                $child  = $children[$i]
+                $isLast = ($i -eq $children.Count - 1)
+                $branch = if ($isLast) { '└── ' } else { '├── ' }
+                Write-Output "$Prefix$branch$($child.Name)"
+
+                if ($child.PSIsContainer) {
+                    $nextPrefix = $Prefix + $(if ($isLast) { '    ' } else { '│   ' })
+                    Invoke-Tree -Item $child -Prefix $nextPrefix -CurrentDepth ($CurrentDepth + 1)
+                }
+            }
+        }
+    }
+
+    process {
+        Write-Output $rootItem.FullName
+        Invoke-Tree -Item $rootItem
+    }
+}
+
+Set-Alias tree Show-Tree
