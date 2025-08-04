@@ -12,7 +12,7 @@ if ($debug) {
     Write-Host "#          ONLY FOR DEVELOPMENT       #" -ForegroundColor Red
     Write-Host "#                                     #" -ForegroundColor Red
     Write-Host "#       IF YOU ARE NOT DEVELOPING     #" -ForegroundColor Red
-    Write-Host "#       JUST RUN \`Update-Profile\`     #" -ForegroundColor Red
+    Write-Host "#       JUST RUN \`Update-Profile\`   #" -ForegroundColor Red
     Write-Host "#        to discard all changes       #" -ForegroundColor Red
     Write-Host "#   and update to the latest profile  #" -ForegroundColor Red
     Write-Host "#               version               #" -ForegroundColor Red
@@ -71,7 +71,14 @@ if (-not (Test-Path $timeFilePath)) {
 }
 
 # Initial GitHub.com connectivity check with 1 second timeout
-$global:canConnectToGitHub = Test-Connection github.com -Count 1 -Quiet -TimeoutSeconds 1
+# Initial GitHub.com connectivity check (compatible with PowerShell 5.x and Core)
+try {
+    $ping = [System.Net.NetworkInformation.Ping]::new()
+    $reply = $ping.Send('github.com', 1000)
+    $global:canConnectToGitHub = $reply.Status -eq 'Success'
+} catch {
+    $global:canConnectToGitHub = $false
+}
 
 # Import Modules and External Profiles
 # Ensure Terminal-Icons module is installed before importing
@@ -500,27 +507,39 @@ if ($IsWindows) {
     }
 }
 
-$PSReadLineOptions = @{
-    EditMode                      = 'Windows'
-    HistoryNoDuplicates           = $true
-    HistorySearchCursorMovesToEnd = $true
-    Colors                        = @{
-        Command   = '#87CEEB'  # SkyBlue (pastel)
-        Parameter = '#98FB98'  # PaleGreen (pastel)
-        Operator  = '#FFB6C1'  # LightPink (pastel)
-        Variable  = '#DDA0DD'  # Plum (pastel)
-        String    = '#FFDAB9'  # PeachPuff (pastel)
-        Number    = '#B0E0E6'  # PowderBlue (pastel)
-        Type      = '#F0E68C'  # Khaki (pastel)
-        Comment   = '#D3D3D3'  # LightGray (pastel)
-        Keyword   = '#8367c7'  # Violet (pastel)
-        Error     = '#FF6347'  # Tomato (keeping it close to red for visibility)
+# ensure PSReadLine is available
+try { Import-Module PSReadLine -ErrorAction Stop } catch {}
+
+if (Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue) {
+
+    # options common to PSReadLine v1+ (PowerShell 5 and Core)
+    $commonOpts = @{
+        EditMode                      = 'Windows'
+        HistoryNoDuplicates           = $true
+        HistorySearchCursorMovesToEnd = $true
+        Colors                        = @{
+            Command   = '#87CEEB'  # SkyBlue
+            Parameter = '#98FB98'  # PaleGreen
+            Operator  = '#FFB6C1'  # LightPink
+            Variable  = '#DDA0DD'  # Plum
+            String    = '#FFDAB9'  # PeachPuff
+            Number    = '#B0E0E6'  # PowderBlue
+            Type      = '#F0E68C'  # Khaki
+            Comment   = '#D3D3D3'  # LightGray
+            Keyword   = '#8367c7'  # Violet
+            Error     = '#FF6347'  # Tomato
+        }
+        BellStyle = 'Visual'
     }
-    PredictionSource              = 'History'
-    PredictionViewStyle           = 'ListView'
-    BellStyle                     = 'Visual'
+
+    Set-PSReadLineOption @commonOpts
+
+    # prediction options only on PSReadLine v2.1+ (PSReadLine versions with prediction support)
+    $psrl = (Get-Module PSReadLine).Version
+    if ($psrl -ge [Version]'2.1' -and (Get-Command Set-PSReadLineOption).Parameters.ContainsKey('PredictionSource')) {
+        Set-PSReadLineOption -PredictionSource History -PredictionViewStyle ListView
+    }
 }
-Set-PSReadLineOption @PSReadLineOptions
 
 # Custom key handlers
 Set-PSReadLineKeyHandler -Key UpArrow -Function HistorySearchBackward
@@ -542,8 +561,12 @@ Set-PSReadLineOption -AddToHistoryHandler {
     return ($null -eq $hasSensitive)
 }
 
-# Improved prediction settings
-Set-PSReadLineOption -PredictionSource HistoryAndPlugin
+# Improved prediction settings (PS5/Core compatible)
+if ((Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue).Parameters.ContainsKey('PredictionSource')) {
+    $psrl = (Get-Module PSReadLine).Version
+    $source = if ($psrl -ge [Version]'2.1') { 'HistoryAndPlugin' } else { 'History' }
+    Set-PSReadLineOption -PredictionSource $source -PredictionViewStyle ListView
+}
 Set-PSReadLineOption -MaximumHistoryCount 10000
 
 # Custom completion for common commands
