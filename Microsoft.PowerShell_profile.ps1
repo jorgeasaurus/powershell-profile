@@ -1067,3 +1067,164 @@ function Show-Tree {
 }
 
 Set-Alias tree Show-Tree
+
+
+function Get-StoicQuote {
+    <#
+    .SYNOPSIS
+        Retrieves a random stoic quote from an API and displays it in a formatted manner.
+    
+    .DESCRIPTION
+        This function queries the stoic-quotes.com API to fetch a random quote from famous 
+        Stoic philosophers like Marcus Aurelius, Seneca, and Epictetus. The quote is then 
+        displayed in a nicely formatted output with the author attribution.
+    
+    .PARAMETER Raw
+        Returns the raw JSON object instead of formatted text output.
+    
+    .EXAMPLE
+        Get-StoicQuote
+        Displays a formatted stoic quote.
+    
+    .EXAMPLE
+        Get-StoicQuote -Raw
+        Returns the raw JSON response from the API.
+    
+    .NOTES
+        This function requires an internet connection to query the API.
+        API endpoint: https://stoic-quotes.com/api/quote
+    #>
+    
+    [CmdletBinding()]
+    param(
+        [switch]$Raw
+    )
+    
+    try {
+        # API endpoint for random stoic quotes
+        $apiUrl = "https://stoic-quotes.com/api/quote"
+        
+        # Make the API request
+        Write-Verbose "Fetching quote from: $apiUrl"
+        $response = Invoke-RestMethod -Uri $apiUrl -Method Get -ErrorAction Stop
+        
+        if ($Raw) {
+            # Return raw JSON response
+            return $response
+        }
+        else {
+            # Format and display the quote nicely
+            $quote = $response.text
+            $author = $response.author
+            
+            # Create a formatted output
+            Write-Host ""
+            Write-Host "💭 " -ForegroundColor Yellow -NoNewline
+            Write-Host "Stoic Wisdom" -ForegroundColor Cyan
+            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+            Write-Host ""
+            
+            # Word wrap the quote if it's too long
+            $maxWidth = 70
+            if ($quote.Length -gt $maxWidth) {
+                $words = $quote -split '\s+'
+                $currentLine = ""
+                
+                foreach ($word in $words) {
+                    if (($currentLine + $word).Length -gt $maxWidth) {
+                        Write-Host "  $currentLine" -ForegroundColor White
+                        $currentLine = $word + " "
+                    }
+                    else {
+                        $currentLine += $word + " "
+                    }
+                }
+                if ($currentLine.Trim()) {
+                    Write-Host "  $($currentLine.Trim())" -ForegroundColor White
+                }
+            }
+            else {
+                Write-Host "  $quote" -ForegroundColor White
+            }
+            
+            Write-Host ""
+            Write-Host "  — $author" -ForegroundColor Green
+            Write-Host ""
+        }
+    }
+    catch {
+        Write-Error "Failed to retrieve stoic quote: $($_.Exception.Message)"
+        
+        # Fallback to a hardcoded quote if API fails
+        Write-Host ""
+        Write-Host "💭 " -ForegroundColor Yellow -NoNewline
+        Write-Host "Stoic Wisdom (Offline)" -ForegroundColor Cyan
+        Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+        Write-Host ""
+        Write-Host "  You have power over your mind - not outside events." -ForegroundColor White
+        Write-Host "  Realize this, and you will find strength." -ForegroundColor White
+        Write-Host ""
+        Write-Host "  — Marcus Aurelius" -ForegroundColor Green
+        Write-Host ""
+    }
+}
+
+# Create an alias for easier access
+Set-Alias -Name "stoic" -Value "Get-StoicQuote" -Description "Get a random stoic quote"
+
+# Optional: Display a quote when the profile loads (uncomment the line below)
+Get-StoicQuote
+
+function Search-RegistryUninstallKey {
+        <#
+    .SYNOPSIS
+    Searches registry uninstall keys for installed software
+    #>
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$SearchFor,
+            [switch]$Wow6432Node
+        )
+    
+        $results = @()
+        $registryPaths = @(
+            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+            'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+        )
+    
+        foreach ($path in $registryPaths) {
+            $keys = Get-ChildItem $path -ErrorAction SilentlyContinue
+            foreach ($key in $keys) {
+                $result = [PSCustomObject]@{
+                    GUID            = $key.PSChildName
+                    Publisher       = $key.GetValue('Publisher')
+                    DisplayName     = $key.GetValue('DisplayName')
+                    DisplayVersion  = $key.GetValue('DisplayVersion')
+                    InstallLocation = $key.GetValue('InstallLocation')
+                    InstallDate     = $key.GetValue('InstallDate')
+                    UninstallString = $key.GetValue('UninstallString')
+                    Wow6432Node     = 'No'
+                }
+                $results += $result
+            }
+        }
+    
+        if ($Wow6432Node) {
+            $wow64Keys = Get-ChildItem 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue
+            foreach ($key in $wow64Keys) {
+                $result = [PSCustomObject]@{
+                    GUID            = $key.PSChildName
+                    Publisher       = $key.GetValue('Publisher')
+                    DisplayName     = $key.GetValue('DisplayName')
+                    DisplayVersion  = $key.GetValue('DisplayVersion')
+                    InstallLocation = $key.GetValue('InstallLocation')
+                    InstallDate     = $key.GetValue('InstallDate')
+                    UninstallString = $key.GetValue('UninstallString')
+                    Wow6432Node     = 'Yes'
+                }
+                $results += $result
+            }
+        }
+    
+        return $results | Sort-Object DisplayName | Where-Object { $_.DisplayName -match $SearchFor }
+    }
