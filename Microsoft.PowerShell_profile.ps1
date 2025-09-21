@@ -91,6 +91,271 @@ if (Test-Path($ChocolateyProfile)) {
     Import-Module "$ChocolateyProfile"
 }
 
+# Windows-specific functions
+if ($IsWindows) {
+    function Invoke-WindowsPowerShellUpgrade {
+        try {
+            Start-Process powershell.exe -ArgumentList "-NoProfile -Command winget upgrade Microsoft.PowerShell --accept-source-agreements --accept-package-agreements" -Wait -NoNewWindow
+            return $true
+        } catch {
+            Write-Error "Failed to trigger PowerShell update via winget: $_"
+            return $false
+        }
+    }
+
+    function Clear-WindowsCache {
+        Write-Host "Detected Windows system" -ForegroundColor Yellow
+
+        Write-Host "Clearing Windows Prefetch..." -ForegroundColor Yellow
+        Remove-Item -Path "$env:SystemRoot\Prefetch\*" -Force -ErrorAction SilentlyContinue
+
+        Write-Host "Clearing Windows Temp..." -ForegroundColor Yellow
+        Remove-Item -Path "$env:SystemRoot\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+        Write-Host "Clearing User Temp..." -ForegroundColor Yellow
+        Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+        Write-Host "Clearing Internet Explorer Cache..." -ForegroundColor Yellow
+        Remove-Item -Path "$env:LOCALAPPDATA\Microsoft\Windows\INetCache\*" -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    function winutil {
+        Invoke-RestMethod https://christitus.com/win | Invoke-Expression
+    }
+
+    function winutildev {
+        Invoke-RestMethod https://christitus.com/windev | Invoke-Expression
+    }
+
+    function admin {
+        if ($args.Count -gt 0) {
+            $argList = $args -join ' '
+            Start-Process wt -Verb runAs -ArgumentList "pwsh.exe -NoExit -Command $argList"
+        } else {
+            Start-Process wt -Verb runAs
+        }
+    }
+
+    function uptime {
+        try {
+            if ($PSVersionTable.PSVersion.Major -eq 5) {
+                $lastBoot = (Get-WmiObject win32_operatingsystem).LastBootUpTime
+                $bootTime = [System.Management.ManagementDateTimeConverter]::ToDateTime($lastBoot)
+            } else {
+                $lastBootStr = net statistics workstation | Select-String "since" | ForEach-Object { $_.ToString().Replace('Statistics since ', '') }
+
+                if ($lastBootStr -match '^\d{2}/\d{2}/\d{4}') {
+                    $dateFormat = 'dd/MM/yyyy'
+                } elseif ($lastBootStr -match '^\d{2}-\d{2}-\d{4}') {
+                    $dateFormat = 'dd-MM-yyyy'
+                } elseif ($lastBootStr -match '^\d{4}/\d{2}/\d{2}') {
+                    $dateFormat = 'yyyy/MM/dd'
+                } elseif ($lastBootStr -match '^\d{4}-\d{2}-\d{2}') {
+                    $dateFormat = 'yyyy-MM-dd'
+                } elseif ($lastBootStr -match '^\d{2}\.\d{2}\.\d{4}') {
+                    $dateFormat = 'dd.MM.yyyy'
+                }
+
+                if ($lastBootStr -match '\bAM\b' -or $lastBootStr -match '\bPM\b') {
+                    $timeFormat = 'h:mm:ss tt'
+                } else {
+                    $timeFormat = 'HH:mm:ss'
+                }
+
+                $bootTime = [System.DateTime]::ParseExact($lastBootStr, "$dateFormat $timeFormat", [System.Globalization.CultureInfo]::InvariantCulture)
+            }
+
+            $formattedBootTime = $bootTime.ToString("dddd, MMMM dd, yyyy HH:mm:ss", [System.Globalization.CultureInfo]::InvariantCulture) + " [$lastBootStr]"
+            Write-Host "System started on: $formattedBootTime" -ForegroundColor DarkGray
+
+            $uptime = (Get-Date) - $bootTime
+
+            $days = $uptime.Days
+            $hours = $uptime.Hours
+            $minutes = $uptime.Minutes
+            $seconds = $uptime.Seconds
+
+            Write-Host ("Uptime: {0} days, {1} hours, {2} minutes, {3} seconds" -f $days, $hours, $minutes, $seconds) -ForegroundColor Blue
+        } catch {
+            Write-Error "An error occurred while retrieving system uptime."
+        }
+    }
+
+    function df {
+        Get-Volume
+    }
+
+    function which($name) {
+        Get-Command $name | Select-Object -ExpandProperty Definition
+    }
+
+    function trash($path) {
+        $fullPath = (Resolve-Path -Path $path).Path
+
+        if (Test-Path $fullPath) {
+            $item = Get-Item $fullPath
+
+            if ($item.PSIsContainer) {
+                $parentPath = $item.Parent.FullName
+            } else {
+                $parentPath = $item.DirectoryName
+            }
+
+            $shell = New-Object -ComObject 'Shell.Application'
+            $shellItem = $shell.NameSpace($parentPath).ParseName($item.Name)
+
+            if ($item) {
+                $shellItem.InvokeVerb('delete')
+                Write-Host "Item '$fullPath' has been moved to the Recycle Bin."
+            } else {
+                Write-Host "Error: Could not find the item '$fullPath' to trash."
+            }
+        } else {
+            Write-Host "Error: Item '$fullPath' does not exist."
+        }
+    }
+
+    function sysinfo {
+        Get-ComputerInfo
+    }
+
+    function flushdns {
+        Clear-DnsClientCache
+        Write-Host "DNS has been flushed"
+    }
+
+    function sys {
+        Start-Process -FilePath cmd.exe -Verb Runas -ArgumentList '/k C:\Windows\System32\PsExec.exe -i -accepteula -s powershell.exe'
+    }
+
+    function Search-RegistryUninstallKey {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$SearchFor,
+            [switch]$Wow6432Node
+        )
+
+        $results = @()
+        $registryPaths = @(
+            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+            'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+        )
+
+        foreach ($path in $registryPaths) {
+            $keys = Get-ChildItem $path -ErrorAction SilentlyContinue
+            foreach ($key in $keys) {
+                $result = [PSCustomObject]@{
+                    GUID            = $key.PSChildName
+                    Publisher       = $key.GetValue('Publisher')
+                    DisplayName     = $key.GetValue('DisplayName')
+                    InstallLocation = $key.GetValue('InstallLocation')
+                    UninstallString = $key.GetValue('UninstallString')
+                    EstimatedSizeMB = if ($key.GetValue('EstimatedSize')) { [math]::Round($key.GetValue('EstimatedSize') / 1024, 2) } else { $null }
+                    InstallDate     = $key.GetValue('InstallDate')
+                    RegistryPath    = $key.PSPath
+                }
+
+                if ($result.DisplayName -and $result.DisplayName -match $SearchFor) {
+                    $results += $result
+                }
+            }
+        }
+
+        if ($Wow6432Node) {
+            $wow6432Path = 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+            $wow6432Keys = Get-ChildItem $wow6432Path -ErrorAction SilentlyContinue
+            foreach ($key in $wow6432Keys) {
+                $result = [PSCustomObject]@{
+                    GUID            = $key.PSChildName
+                    Publisher       = $key.GetValue('Publisher')
+                    DisplayName     = $key.GetValue('DisplayName')
+                    InstallLocation = $key.GetValue('InstallLocation')
+                    UninstallString = $key.GetValue('UninstallString')
+                    EstimatedSizeMB = if ($key.GetValue('EstimatedSize')) { [math]::Round($key.GetValue('EstimatedSize') / 1024, 2) } else { $null }
+                    InstallDate     = $key.GetValue('InstallDate')
+                    RegistryPath    = $key.PSPath
+                }
+
+                if ($result.DisplayName -and $result.DisplayName -match $SearchFor) {
+                    $results += $result
+                }
+            }
+        }
+
+        return $results
+    }
+
+    function Test-WindowsFont {
+        param ([string]$FontName)
+        $fontsFolder = [System.Environment]::GetFolderPath('Fonts')
+        foreach ($ext in @('.ttf', '.otf')) {
+            if (Test-Path (Join-Path $fontsFolder "$FontName$ext")) { return $true }
+        }
+
+        $fontReg = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"
+        return (Get-ItemProperty -Path $fontReg -ErrorAction SilentlyContinue).PSObject.Properties |
+        Where-Object { $_.Name -like "*$FontName*" } | Select-Object -First 1
+    }
+}
+
+# macOS-specific functions
+if ($IsMacOS) {
+    function Invoke-MacPowerShellUpgrade {
+        if (-not (Get-Command brew -ErrorAction SilentlyContinue)) {
+            Write-Warning "Homebrew is not installed. Please install Homebrew first: /bin/bash -c '$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'"
+            return $false
+        }
+
+        try {
+            brew update
+            brew upgrade powershell --cask
+            return $true
+        } catch {
+            Write-Error "Failed to update PowerShell via Homebrew: $_"
+            return $false
+        }
+    }
+
+    function Clear-MacCache {
+        Write-Host "Detected macOS system" -ForegroundColor Yellow
+
+        Write-Host "Clearing System Cache..." -ForegroundColor Yellow
+        sudo rm -rf /Library/Caches/* 2>$null
+
+        Write-Host "Clearing User Cache..." -ForegroundColor Yellow
+        Remove-Item -Path "$HOME/Library/Caches/*" -Recurse -Force -ErrorAction SilentlyContinue
+
+        Write-Host "Clearing DNS Cache..." -ForegroundColor Yellow
+        sudo dscacheutil -flushcache
+        sudo killall -HUP mDNSResponder
+
+        Write-Host "Clearing Font Cache..." -ForegroundColor Yellow
+        sudo atsutil databases -remove
+        atsutil server -shutdown
+        atsutil server -ping
+    }
+
+    function Test-MacFont {
+        param ([string]$FontName)
+        $fontDirs = @("~/Library/Fonts", "/Library/Fonts", "/System/Library/Fonts")
+        foreach ($dir in $fontDirs) {
+            $realDir = $dir.Replace("~", $HOME)
+            if (Get-ChildItem -Path $realDir -Recurse -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -like "*$FontName*" -and ($_.Extension -in @('.ttf', '.otf')) }) {
+                return $true
+            }
+        }
+
+        if ($FontName -like "*cascadia*") {
+            $brewList = brew list --cask font-cascadia-code-nerd-font 2>$null
+            return $brewList -ne $null
+        }
+        return $false
+    }
+}
+
+# OS-agnostic functions
+
 # Check for Profile Updates
 function Update-Profile {
     try {
@@ -146,18 +411,18 @@ function Update-PowerShell {
 
         if ($updateNeeded) {
             Write-Host "Updating PowerShell..." -ForegroundColor Yellow
+            $updated = $false
             if ($IsWindows) {
-                Start-Process powershell.exe -ArgumentList "-NoProfile -Command winget upgrade Microsoft.PowerShell --accept-source-agreements --accept-package-agreements" -Wait -NoNewWindow
+                $updated = Invoke-WindowsPowerShellUpgrade
             } elseif ($IsMacOS) {
-                if (Get-Command brew -ErrorAction SilentlyContinue) {
-                    brew update
-                    brew upgrade powershell --cask
-                } else {
-                    Write-Warning "Homebrew is not installed. Please install Homebrew first: /bin/bash -c '$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'"
-                    return
-                }
+                $updated = Invoke-MacPowerShellUpgrade
+            } else {
+                Write-Warning "Automatic PowerShell updates are not supported on this operating system."
             }
-            Write-Host "PowerShell has been updated. Please restart your shell to reflect changes" -ForegroundColor Magenta
+
+            if ($updated) {
+                Write-Host "PowerShell has been updated. Please restart your shell to reflect changes" -ForegroundColor Magenta
+            }
         } else {
             Write-Host "Your PowerShell is up to date." -ForegroundColor Green
         }
@@ -186,48 +451,9 @@ function Clear-Cache {
     Write-Host "Clearing cache..." -ForegroundColor Cyan
 
     if ($IsWindows) {
-        # Windows cache clearing
-        Write-Host "Detected Windows system" -ForegroundColor Yellow
-
-        # Clear Windows Prefetch
-        Write-Host "Clearing Windows Prefetch..." -ForegroundColor Yellow
-        Remove-Item -Path "$env:SystemRoot\Prefetch\*" -Force -ErrorAction SilentlyContinue
-
-        # Clear Windows Temp
-        Write-Host "Clearing Windows Temp..." -ForegroundColor Yellow
-        Remove-Item -Path "$env:SystemRoot\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
-
-        # Clear User Temp
-        Write-Host "Clearing User Temp..." -ForegroundColor Yellow
-        Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
-
-        # Clear Internet Explorer Cache
-        Write-Host "Clearing Internet Explorer Cache..." -ForegroundColor Yellow
-        Remove-Item -Path "$env:LOCALAPPDATA\Microsoft\Windows\INetCache\*" -Recurse -Force -ErrorAction SilentlyContinue
-
+        Clear-WindowsCache
     } elseif ($IsMacOS) {
-        # macOS cache clearing
-        Write-Host "Detected macOS system" -ForegroundColor Yellow
-
-        # Clear System Cache
-        Write-Host "Clearing System Cache..." -ForegroundColor Yellow
-        sudo rm -rf /Library/Caches/* 2>$null
-
-        # Clear User Cache
-        Write-Host "Clearing User Cache..." -ForegroundColor Yellow
-        Remove-Item -rf ~/Library/Caches/* 2>$null
-
-        # Clear DNS Cache
-        Write-Host "Clearing DNS Cache..." -ForegroundColor Yellow
-        sudo dscacheutil -flushcache
-        sudo killall -HUP mDNSResponder
-
-        # Clear Font Cache
-        Write-Host "Clearing Font Cache..." -ForegroundColor Yellow
-        sudo atsutil databases -remove
-        atsutil server -shutdown
-        atsutil server -ping
-
+        Clear-MacCache
     } else {
         Write-Host "Unsupported operating system" -ForegroundColor Red
         return
@@ -237,7 +463,7 @@ function Clear-Cache {
 }
 
 
-# Utility Functions
+# OS-agnostic Utility Functions
 
 # Quick Access to Editing the Profile
 function Edit-Profile {
@@ -254,80 +480,6 @@ function ff($name) {
 
 # Network Utilities
 function Get-PubIP { (Invoke-WebRequest http://ifconfig.me/ip).Content }
-
-# Open WinUtil full-release
-function winutil {
-    Invoke-RestMethod https://christitus.com/win | Invoke-Expression
-}
-
-# Open WinUtil pre-release
-function winutildev {
-    Invoke-RestMethod https://christitus.com/windev | Invoke-Expression
-}
-
-# System Utilities
-function admin {
-    if ($args.Count -gt 0) {
-        $argList = $args -join ' '
-        Start-Process wt -Verb runAs -ArgumentList "pwsh.exe -NoExit -Command $argList"
-    } else {
-        Start-Process wt -Verb runAs
-    }
-}
-
-function uptime {
-    try {
-        # check powershell version
-        if ($PSVersionTable.PSVersion.Major -eq 5) {
-            $lastBoot = (Get-WmiObject win32_operatingsystem).LastBootUpTime
-            $bootTime = [System.Management.ManagementDateTimeConverter]::ToDateTime($lastBoot)
-        } else {
-            $lastBootStr = net statistics workstation | Select-String "since" | ForEach-Object { $_.ToString().Replace('Statistics since ', '') }
-            # check date format
-            if ($lastBootStr -match '^\d{2}/\d{2}/\d{4}') {
-                $dateFormat = 'dd/MM/yyyy'
-            } elseif ($lastBootStr -match '^\d{2}-\d{2}-\d{4}') {
-                $dateFormat = 'dd-MM-yyyy'
-            } elseif ($lastBootStr -match '^\d{4}/\d{2}/\d{2}') {
-                $dateFormat = 'yyyy/MM/dd'
-            } elseif ($lastBootStr -match '^\d{4}-\d{2}-\d{2}') {
-                $dateFormat = 'yyyy-MM-dd'
-            } elseif ($lastBootStr -match '^\d{2}\.\d{2}\.\d{4}') {
-                $dateFormat = 'dd.MM.yyyy'
-            }
-
-            # check time format
-            if ($lastBootStr -match '\bAM\b' -or $lastBootStr -match '\bPM\b') {
-                $timeFormat = 'h:mm:ss tt'
-            } else {
-                $timeFormat = 'HH:mm:ss'
-            }
-
-            $bootTime = [System.DateTime]::ParseExact($lastBootStr, "$dateFormat $timeFormat", [System.Globalization.CultureInfo]::InvariantCulture)
-        }
-
-        # Format the start time
-        ### $formattedBootTime = $bootTime.ToString("dddd, MMMM dd, yyyy HH:mm:ss", [System.Globalization.CultureInfo]::InvariantCulture)
-        $formattedBootTime = $bootTime.ToString("dddd, MMMM dd, yyyy HH:mm:ss", [System.Globalization.CultureInfo]::InvariantCulture) + " [$lastBootStr]"
-        Write-Host "System started on: $formattedBootTime" -ForegroundColor DarkGray
-
-        # calculate uptime
-        $uptime = (Get-Date) - $bootTime
-
-        # Uptime in days, hours, minutes, and seconds
-        $days = $uptime.Days
-        $hours = $uptime.Hours
-        $minutes = $uptime.Minutes
-        $seconds = $uptime.Seconds
-
-        # Uptime output
-        Write-Host ("Uptime: {0} days, {1} hours, {2} minutes, {3} seconds" -f $days, $hours, $minutes, $seconds) -ForegroundColor Blue
-
-
-    } catch {
-        Write-Error "An error occurred while retrieving system uptime."
-    }
-}
 
 function reload-profile {
     & $profile
@@ -372,18 +524,8 @@ function grep($regex, $dir) {
     $input | Select-String $regex
 }
 
-function df {
-    Get-Volume
-}
-
 function sed($file, $find, $replace) {
     (Get-Content $file).replace("$find", $replace) | Set-Content $file
-}
-
-if ($IsWindows) {
-    function which($name) {
-        Get-Command $name | Select-Object -ExpandProperty Definition
-    }
 }
 
 function export($name, $value) {
@@ -413,34 +555,6 @@ function nf { param($name) New-Item -ItemType "file" -Path . -Name $name }
 
 # Directory Management
 function mkcd { param($dir) mkdir $dir -Force; Set-Location $dir }
-
-function trash($path) {
-    $fullPath = (Resolve-Path -Path $path).Path
-
-    if (Test-Path $fullPath) {
-        $item = Get-Item $fullPath
-
-        if ($item.PSIsContainer) {
-            # Handle directory
-            $parentPath = $item.Parent.FullName
-        } else {
-            # Handle file
-            $parentPath = $item.DirectoryName
-        }
-
-        $shell = New-Object -ComObject 'Shell.Application'
-        $shellItem = $shell.NameSpace($parentPath).ParseName($item.Name)
-
-        if ($item) {
-            $shellItem.InvokeVerb('delete')
-            Write-Host "Item '$fullPath' has been moved to the Recycle Bin."
-        } else {
-            Write-Host "Error: Could not find the item '$fullPath' to trash."
-        }
-    } else {
-        Write-Host "Error: Item '$fullPath' does not exist."
-    }
-}
 
 ### Quality of Life Aliases
 
@@ -484,14 +598,6 @@ function lazyg {
 }
 
 # Quick Access to System Information
-function sysinfo { Get-ComputerInfo }
-
-# Networking Utilities
-function flushdns {
-    Clear-DnsClientCache
-    Write-Host "DNS has been flushed"
-}
-
 # Clipboard Utilities
 function cpy { Set-Clipboard $args[0] }
 
@@ -529,7 +635,7 @@ if (Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue) {
             Keyword   = '#8367c7'  # Violet
             Error     = '#FF6347'  # Tomato
         }
-        BellStyle = 'Visual'
+        BellStyle                     = 'Visual'
     }
 
     Set-PSReadLineOption @commonOpts
@@ -648,36 +754,6 @@ function Test-FontInstalled {
         return Test-WindowsFont -FontName $FontName
     } elseif ($IsMacOS) {
         return Test-MacFont -FontName $FontName
-    }
-    return $false
-}
-
-function Test-WindowsFont {
-    param ([string]$FontName)
-    $fontsFolder = [System.Environment]::GetFolderPath('Fonts')
-    foreach ($ext in @('.ttf', '.otf')) {
-        if (Test-Path (Join-Path $fontsFolder "$FontName$ext")) { return $true }
-    }
-    # Fallback: check registry for font presence
-    $fontReg = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"
-    return (Get-ItemProperty -Path $fontReg -ErrorAction SilentlyContinue).PSObject.Properties |
-    Where-Object { $_.Name -like "*$FontName*" } | Select-Object -First 1
-}
-
-function Test-MacFont {
-    param ([string]$FontName)
-    $fontDirs = @("~/Library/Fonts", "/Library/Fonts", "/System/Library/Fonts")
-    foreach ($dir in $fontDirs) {
-        $realDir = $dir.Replace("~", $HOME)
-        if (Get-ChildItem -Path $realDir -Recurse -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -like "*$FontName*" -and ($_.Extension -in @('.ttf', '.otf')) }) {
-            return $true
-        }
-    }
-    # Check Homebrew installation for known fonts
-    if ($FontName -like "*cascadia*") {
-        $brewList = brew list --cask font-cascadia-code-nerd-font 2>$null
-        return $brewList -ne $null
     }
     return $false
 }
@@ -803,10 +879,10 @@ function Invoke-Spongebob {
 }
 function yt {
 
-    Begin {
+    begin {
         $query = 'https://www.youtube.com/results?search_query='
     }
-    Process {
+    process {
         Write-Host $args.Count, "Arguments detected"
         "Parsing out Arguments: $args"
         for ($i = 0; $i -le $args.Count; $i++) {
@@ -816,7 +892,7 @@ function yt {
         $args | ForEach-Object { $query = $query + "$_+" }
         $url = "$query"
     }
-    End {
+    end {
         $url.Substring(0, $url.Length - 1)
         "Final Search will be $url"
         "Invoking..."
@@ -824,89 +900,76 @@ function yt {
     }
 }
 
-# Splat parameters for Join-Path
-$joinParams = @{
-    Path              = $Onedrive
-    ChildPath         = '10-19 Personal Projects/14 Scripts/14.01 Configs'
-    AdditionalChildPath = 'PsAiConfig.ps1'
-}
-$envPath = Join-Path @joinParams
-if (Test-Path $envPath) {
-    . $envPath
-    Write-Host "PSAI Env Config file loaded." -ForegroundColor Green
-}
-
 function Get-InstalledModuleFast {
-	param(
-		#Modules to filter for. Wildcards are supported.
-		[string]$Name,
-		#Path(s) to search for modules. Defaults to your PSModulePath paths
-		[string[]]$ModulePath = ($env:PSModulePath -split [System.IO.Path]::PathSeparator),
-		#Return all installed modules and not just the latest versions
-		[switch]$All
-	)
+    param(
+        #Modules to filter for. Wildcards are supported.
+        [string]$Name,
+        #Path(s) to search for modules. Defaults to your PSModulePath paths
+        [string[]]$ModulePath = ($env:PSModulePath -split [System.IO.Path]::PathSeparator),
+        #Return all installed modules and not just the latest versions
+        [switch]$All
+    )
 
-	$allModules = foreach ($pathItem in $ModulePath) {
-		#Skip paths that don't exist
-		if (-not (Test-Path $pathItem)) { continue }
+    $allModules = foreach ($pathItem in $ModulePath) {
+        #Skip paths that don't exist
+        if (-not (Test-Path $pathItem)) { continue }
 
-		Get-ChildItem -Path $pathItem -Filter "*.psd1" -Recurse -ErrorAction SilentlyContinue
-		| Foreach-Object {
-			$manifestPath = $_
-			$manifestName = (Split-Path -ea 0 $_ -Leaf) -replace "\.psd1$"
-			if ($Name -and $ManifestName -notlike $Name) { return }
-			$versionPath = Split-Path -ea 0 $_
-			[Version]$versionRoot = ( $versionPath | Split-Path -ea 0 -Leaf) -as [Version]
+        Get-ChildItem -Path $pathItem -Filter "*.psd1" -Recurse -ErrorAction SilentlyContinue
+        | ForEach-Object {
+            $manifestPath = $_
+            $manifestName = (Split-Path -ea 0 $_ -Leaf) -replace "\.psd1$"
+            if ($Name -and $ManifestName -notlike $Name) { return }
+            $versionPath = Split-Path -ea 0 $_
+            [Version]$versionRoot = ( $versionPath | Split-Path -ea 0 -Leaf) -as [Version]
 
-			if (-not $versionRoot) {
-				# Try for a non-versioned module by resetting the search
-				$versionPath = $_
-			}
+            if (-not $versionRoot) {
+                # Try for a non-versioned module by resetting the search
+                $versionPath = $_
+            }
 
-			$moduleRootName = (Split-Path -ea 0 $versionPath | Split-Path -ea 0 -Leaf)
-			if ($moduleRootName -ne $manifestName) {
-				Write-Verbose "$manifestPath doesnt match a module folder, not a module manifest. skipping..."
-				return
-			}
+            $moduleRootName = (Split-Path -ea 0 $versionPath | Split-Path -ea 0 -Leaf)
+            if ($moduleRootName -ne $manifestName) {
+                Write-Verbose "$manifestPath doesnt match a module folder, not a module manifest. skipping..."
+                return
+            }
 
-			try {
-				$fullInfo = Import-PowerShellDataFile -Path $_ -Ea Stop
-			}
-			catch {
-				Write-Warning "Failed to import module manifest for $manifestPath. Skipping for now..."
-				return
-			}
+            try {
+                $fullInfo = Import-PowerShellDataFile -Path $_ -Ea Stop
+            } catch {
+                Write-Warning "Failed to import module manifest for $manifestPath. Skipping for now..."
+                return
+            }
 
-			if (-not $fullInfo) { return }
-			$manifestVersion = $fullInfo.ModuleVersion -as [Version]
-			if (-not $manifestVersion) { Write-Warning "$manifestPath has an invalid or missing ModuleVersion in the manifest. You should fix this. Skipping for now..."; return }
+            if (-not $fullInfo) { return }
+            $manifestVersion = $fullInfo.ModuleVersion -as [Version]
+            if (-not $manifestVersion) { Write-Warning "$manifestPath has an invalid or missing ModuleVersion in the manifest. You should fix this. Skipping for now..."; return }
 
-			if ($versionRoot -and $versionRoot -ne $manifestVersion) { Write-Warning "$_ has a different version in the manifest ($manifestVersion) than the folder name ($versionRoot). You should fix this. Skipping for now..."; return }
+            if ($versionRoot -and $versionRoot -ne $manifestVersion) { Write-Warning "$_ has a different version in the manifest ($manifestVersion) than the folder name ($versionRoot). You should fix this. Skipping for now..."; return }
 
-			#Add prerelease info if present
-			if ($fullInfo.PrivateData.PSData.Prerelease) {
-				$manifestVersion = [Management.Automation.SemanticVersion]"$manifestVersion-$($fullInfo.PrivateData.PSData.Prerelease)"
-			}
+            #Add prerelease info if present
+            if ($fullInfo.PrivateData.PSData.Prerelease) {
+                $manifestVersion = [Management.Automation.SemanticVersion]"$manifestVersion-$($fullInfo.PrivateData.PSData.Prerelease)"
+            }
 
-			[PSCustomObject][ordered]@{
-				Name = $moduleRootName
-				Version = $manifestVersion
-				Path = $_.FullName
-			}
-		}
-	}
+            [PSCustomObject][ordered]@{
+                Name    = $moduleRootName
+                Version = $manifestVersion
+                Path    = $_.FullName
+            }
+        }
+    }
 
-	$modulesProcessed = @{}
+    $modulesProcessed = @{}
 
-	$allModules
-	| Sort-Object -Property Name, @{Expression='Version';Descending=$true}
-	| ForEach-Object {
-		if ($All) {return $_}
-		if (-not $modulesProcessed.($_.Name)) {
-			$modulesProcessed.($_.Name) = $true
-			return $_
-		}
-	}
+    $allModules
+    | Sort-Object -Property Name, @{Expression = 'Version'; Descending = $true }
+    | ForEach-Object {
+        if ($All) { return $_ }
+        if (-not $modulesProcessed.($_.Name)) {
+            $modulesProcessed.($_.Name) = $true
+            return $_
+        }
+    }
 }
 
 function Update-Modules {
@@ -1013,23 +1076,22 @@ function Update-Modules {
 }
 
 function Show-Tree {
-    [CmdletBinding(DefaultParameterSetName='Dirs')]
+    [CmdletBinding(DefaultParameterSetName = 'Dirs')]
     param(
-        [Parameter(Position=0)]
+        [Parameter(Position = 0)]
         [string]$Path = '.',
 
-        [Parameter(Position=1)]
+        [Parameter(Position = 1)]
         [int]$Depth = [int]::MaxValue,
 
-        [Parameter(ParameterSetName='Files')]
+        [Parameter(ParameterSetName = 'Files')]
         [switch]$ShowFiles
     )
 
     begin {
         try {
             $rootItem = Get-Item -LiteralPath $Path -ErrorAction Stop
-        }
-        catch {
+        } catch {
             Write-Error "Path not found: $Path"
             return
         }
@@ -1037,17 +1099,17 @@ function Show-Tree {
         function Invoke-Tree {
             param(
                 [IO.FileSystemInfo]$Item,
-                [string]$Prefix       = '',
+                [string]$Prefix = '',
                 [int]   $CurrentDepth = 1
             )
 
             if ($CurrentDepth -gt $Depth) { return }
 
             $children = Get-ChildItem -LiteralPath $Item.FullName -Force -ErrorAction SilentlyContinue |
-                        Where-Object { $ShowFiles.IsPresent -or $_.PSIsContainer }
+            Where-Object { $ShowFiles.IsPresent -or $_.PSIsContainer }
 
             for ($i = 0; $i -lt $children.Count; $i++) {
-                $child  = $children[$i]
+                $child = $children[$i]
                 $isLast = ($i -eq $children.Count - 1)
                 $branch = if ($isLast) { '└── ' } else { '├── ' }
                 Write-Output "$Prefix$branch$($child.Name)"
@@ -1067,7 +1129,6 @@ function Show-Tree {
 }
 
 Set-Alias tree Show-Tree
-
 
 function Get-StoicQuote {
     <#
@@ -1111,8 +1172,7 @@ function Get-StoicQuote {
         if ($Raw) {
             # Return raw JSON response
             return $response
-        }
-        else {
+        } else {
             # Format and display the quote nicely
             $quote = $response.text
             $author = $response.author
@@ -1134,16 +1194,14 @@ function Get-StoicQuote {
                     if (($currentLine + $word).Length -gt $maxWidth) {
                         Write-Host "  $currentLine" -ForegroundColor White
                         $currentLine = $word + " "
-                    }
-                    else {
+                    } else {
                         $currentLine += $word + " "
                     }
                 }
                 if ($currentLine.Trim()) {
                     Write-Host "  $($currentLine.Trim())" -ForegroundColor White
                 }
-            }
-            else {
+            } else {
                 Write-Host "  $quote" -ForegroundColor White
             }
             
@@ -1151,8 +1209,7 @@ function Get-StoicQuote {
             Write-Host "  — $author" -ForegroundColor Green
             Write-Host ""
         }
-    }
-    catch {
+    } catch {
         Write-Error "Failed to retrieve stoic quote: $($_.Exception.Message)"
         
         # Fallback to a hardcoded quote if API fails
@@ -1168,63 +1225,57 @@ function Get-StoicQuote {
         Write-Host ""
     }
 }
+function Get-CredentialsFromKeyVault {
+    param(
+        [string]$KeyVaultName
+    )
+
+    # Splat common parameters for Get-AzKeyVaultSecret
+    $splat = @{
+        VaultName   = $KeyVaultName
+        AsPlainText = $true
+    }
+
+    $splat.Name = "app-client-id"
+    $clientId = Get-AzKeyVaultSecret @splat
+
+    $splat.Name = "app-client-secret"
+    $clientSecret = Get-AzKeyVaultSecret @splat
+
+    $splat.Name = "tenant-id"
+    $tenantId = Get-AzKeyVaultSecret @splat
+
+    return @{
+        ClientId     = $clientId
+        ClientSecret = $clientSecret
+        TenantId     = $tenantId
+    }
+}
+
+function graph {
+    Connect-AzAccount
+
+    # Function to get credentials from Key Vault
+
+
+    # Use the credentials
+    $keyVaultName = "jrgsrs-keyvault"
+    $creds = Get-CredentialsFromKeyVault -KeyVaultName $keyVaultName
+
+    # Connect to Azure using the app registration
+    $Env:AZURE_CLIENT_ID = $creds.ClientId
+    $Env:AZURE_TENANT_ID = $creds.TenantId
+    $Env:AZURE_CLIENT_SECRET = $creds.ClientSecret
+    Connect-MgGraph -EnvironmentVariable -NoWelcome
+    if ($?) {
+        Write-Host "Connected to Microsoft Graph successfully." -ForegroundColor Green
+    } else {
+        throw "Failed to connect to Microsoft Graph."
+    }
+}
 
 # Create an alias for easier access
 Set-Alias -Name "stoic" -Value "Get-StoicQuote" -Description "Get a random stoic quote"
 
 # Optional: Display a quote when the profile loads (uncomment the line below)
 Get-StoicQuote
-
-function Search-RegistryUninstallKey {
-        <#
-    .SYNOPSIS
-    Searches registry uninstall keys for installed software
-    #>
-        param(
-            [Parameter(Mandatory = $true)]
-            [string]$SearchFor,
-            [switch]$Wow6432Node
-        )
-    
-        $results = @()
-        $registryPaths = @(
-            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
-            'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
-        )
-    
-        foreach ($path in $registryPaths) {
-            $keys = Get-ChildItem $path -ErrorAction SilentlyContinue
-            foreach ($key in $keys) {
-                $result = [PSCustomObject]@{
-                    GUID            = $key.PSChildName
-                    Publisher       = $key.GetValue('Publisher')
-                    DisplayName     = $key.GetValue('DisplayName')
-                    DisplayVersion  = $key.GetValue('DisplayVersion')
-                    InstallLocation = $key.GetValue('InstallLocation')
-                    InstallDate     = $key.GetValue('InstallDate')
-                    UninstallString = $key.GetValue('UninstallString')
-                    Wow6432Node     = 'No'
-                }
-                $results += $result
-            }
-        }
-    
-        if ($Wow6432Node) {
-            $wow64Keys = Get-ChildItem 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue
-            foreach ($key in $wow64Keys) {
-                $result = [PSCustomObject]@{
-                    GUID            = $key.PSChildName
-                    Publisher       = $key.GetValue('Publisher')
-                    DisplayName     = $key.GetValue('DisplayName')
-                    DisplayVersion  = $key.GetValue('DisplayVersion')
-                    InstallLocation = $key.GetValue('InstallLocation')
-                    InstallDate     = $key.GetValue('InstallDate')
-                    UninstallString = $key.GetValue('UninstallString')
-                    Wow6432Node     = 'Yes'
-                }
-                $results += $result
-            }
-        }
-    
-        return $results | Sort-Object DisplayName | Where-Object { $_.DisplayName -match $SearchFor }
-    }
