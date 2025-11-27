@@ -44,19 +44,25 @@ if (Test-Path ~/Library/CloudStorage/OneDrive-Personal) {
     Set-Variable -Name Onedrive -Value "$UserProfile/OneDrive" -Scope Global
 }
 
-# Set the Oh My Posh theme based on platform
+# Oh My Posh theme configuration
+$OhMyPoshTheme = "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_rainbow.omp.json"
+
+# Platform-specific initialization
 if ($IsWindows) {
-    $OhMyPoshConfig = $Config.OhMyPosh.Windows.Theme
     Write-Host "✅ PowerShell on Windows - PSVersion $($PSVersionTable.PSVersion)" -ForegroundColor Green
-    #opt-out of telemetry before doing anything, only if PowerShell is run as admin
-    if ([bool]([System.Security.Principal.WindowsIdentity]::GetCurrent()).IsSystem) {
-        [System.Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', 'true', [System.EnvironmentVariableTarget]::Machine)
-    }
-    # Admin Check and Prompt Customization
+
+    # Admin Check
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
+    # Opt-out of telemetry if running as Administrator (not SYSTEM)
+    if ($isAdmin) {
+        try {
+            [System.Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', 'true', [System.EnvironmentVariableTarget]::Machine)
+        } catch {
+            # May fail without elevation - silently ignore
+        }
+    }
 } else {
-    $OhMyPoshConfig = $Config.OhMyPosh.Unix.Theme
     $env:USERPROFILE = $HOME
     Write-Host "✅ PowerShell on Mac - PSVersion $($PSVersionTable.PSVersion)" -ForegroundColor Green
 }
@@ -120,11 +126,57 @@ if ($IsWindows) {
     }
 
     function winutil {
-        Invoke-RestMethod https://christitus.com/win | Invoke-Expression
+        <#
+        .SYNOPSIS
+            Launches the Chris Titus Tech Windows Utility (stable release)
+        .DESCRIPTION
+            Downloads and runs the WinUtil script in a new elevated PowerShell window
+            for security isolation. The script is NOT executed in the current session.
+        #>
+        [CmdletBinding()]
+        param()
+
+        Write-Warning "This will download and execute a remote script in an elevated window."
+        Write-Warning "Source: https://christitus.com/win"
+        $confirm = Read-Host "Continue? (y/N)"
+        if ($confirm -ne 'y') {
+            Write-Host "Cancelled." -ForegroundColor Yellow
+            return
+        }
+
+        # Run in isolated elevated process - not in current session
+        Start-Process powershell.exe -Verb RunAs -ArgumentList @(
+            "-NoProfile"
+            "-ExecutionPolicy", "Bypass"
+            "-Command", "irm https://christitus.com/win | iex; Read-Host 'Press Enter to close'"
+        )
     }
 
     function winutildev {
-        Invoke-RestMethod https://christitus.com/windev | Invoke-Expression
+        <#
+        .SYNOPSIS
+            Launches the Chris Titus Tech Windows Utility (dev/pre-release)
+        .DESCRIPTION
+            Downloads and runs the WinUtil dev script in a new elevated PowerShell window
+            for security isolation. The script is NOT executed in the current session.
+        #>
+        [CmdletBinding()]
+        param()
+
+        Write-Warning "This will download and execute a remote PRE-RELEASE script in an elevated window."
+        Write-Warning "Source: https://christitus.com/windev"
+        $confirm = Read-Host "Continue? (y/N)"
+        if ($confirm -ne 'y') {
+            Write-Host "Cancelled." -ForegroundColor Yellow
+            return
+        }
+
+        # Run in isolated elevated process - not in current session
+        Start-Process powershell.exe -Verb RunAs -ArgumentList @(
+            "-NoProfile"
+            "-ExecutionPolicy", "Bypass"
+            "-Command", "irm https://christitus.com/windev | iex; Read-Host 'Press Enter to close'"
+        )
     }
 
     function admin {
@@ -138,31 +190,51 @@ if ($IsWindows) {
 
     function uptime {
         try {
+            $lastBootStr = $null
+
             if ($PSVersionTable.PSVersion.Major -eq 5) {
                 $lastBoot = (Get-WmiObject win32_operatingsystem).LastBootUpTime
                 $bootTime = [System.Management.ManagementDateTimeConverter]::ToDateTime($lastBoot)
+                $lastBootStr = $bootTime.ToString()
             } else {
-                $lastBootStr = net statistics workstation | Select-String "since" | ForEach-Object { $_.ToString().Replace('Statistics since ', '') }
-
-                if ($lastBootStr -match '^\d{2}/\d{2}/\d{4}') {
-                    $dateFormat = 'dd/MM/yyyy'
-                } elseif ($lastBootStr -match '^\d{2}-\d{2}-\d{4}') {
-                    $dateFormat = 'dd-MM-yyyy'
-                } elseif ($lastBootStr -match '^\d{4}/\d{2}/\d{2}') {
-                    $dateFormat = 'yyyy/MM/dd'
-                } elseif ($lastBootStr -match '^\d{4}-\d{2}-\d{2}') {
-                    $dateFormat = 'yyyy-MM-dd'
-                } elseif ($lastBootStr -match '^\d{2}\.\d{2}\.\d{4}') {
-                    $dateFormat = 'dd.MM.yyyy'
-                }
-
-                if ($lastBootStr -match '\bAM\b' -or $lastBootStr -match '\bPM\b') {
-                    $timeFormat = 'h:mm:ss tt'
+                # Use Get-CimInstance for PowerShell 7+ (cross-platform compatible)
+                $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
+                if ($os) {
+                    $bootTime = $os.LastBootUpTime
+                    $lastBootStr = $bootTime.ToString()
                 } else {
-                    $timeFormat = 'HH:mm:ss'
-                }
+                    # Fallback to net statistics for older systems
+                    $lastBootStr = net statistics workstation | Select-String "since" | ForEach-Object { $_.ToString().Replace('Statistics since ', '') }
 
-                $bootTime = [System.DateTime]::ParseExact($lastBootStr, "$dateFormat $timeFormat", [System.Globalization.CultureInfo]::InvariantCulture)
+                    if (-not $lastBootStr) {
+                        throw "Unable to determine system boot time"
+                    }
+
+                    $dateFormat = $null
+                    if ($lastBootStr -match '^\d{2}/\d{2}/\d{4}') {
+                        $dateFormat = 'dd/MM/yyyy'
+                    } elseif ($lastBootStr -match '^\d{2}-\d{2}-\d{4}') {
+                        $dateFormat = 'dd-MM-yyyy'
+                    } elseif ($lastBootStr -match '^\d{4}/\d{2}/\d{2}') {
+                        $dateFormat = 'yyyy/MM/dd'
+                    } elseif ($lastBootStr -match '^\d{4}-\d{2}-\d{2}') {
+                        $dateFormat = 'yyyy-MM-dd'
+                    } elseif ($lastBootStr -match '^\d{2}\.\d{2}\.\d{4}') {
+                        $dateFormat = 'dd.MM.yyyy'
+                    }
+
+                    if (-not $dateFormat) {
+                        throw "Unable to parse date format from: $lastBootStr"
+                    }
+
+                    if ($lastBootStr -match '\bAM\b' -or $lastBootStr -match '\bPM\b') {
+                        $timeFormat = 'h:mm:ss tt'
+                    } else {
+                        $timeFormat = 'HH:mm:ss'
+                    }
+
+                    $bootTime = [System.DateTime]::ParseExact($lastBootStr, "$dateFormat $timeFormat", [System.Globalization.CultureInfo]::InvariantCulture)
+                }
             }
 
             $formattedBootTime = $bootTime.ToString("dddd, MMMM dd, yyyy HH:mm:ss", [System.Globalization.CultureInfo]::InvariantCulture) + " [$lastBootStr]"
@@ -248,6 +320,7 @@ if ($IsWindows) {
                     GUID            = $key.PSChildName
                     Publisher       = $key.GetValue('Publisher')
                     DisplayName     = $key.GetValue('DisplayName')
+                    DisplayVersion  = $key.GetValue('DisplayVersion')
                     InstallLocation = $key.GetValue('InstallLocation')
                     UninstallString = $key.GetValue('UninstallString')
                     EstimatedSizeMB = if ($key.GetValue('EstimatedSize')) { [math]::Round($key.GetValue('EstimatedSize') / 1024, 2) } else { $null }
@@ -269,6 +342,7 @@ if ($IsWindows) {
                     GUID            = $key.PSChildName
                     Publisher       = $key.GetValue('Publisher')
                     DisplayName     = $key.GetValue('DisplayName')
+                    DisplayVersion  = $key.GetValue('DisplayVersion')
                     InstallLocation = $key.GetValue('InstallLocation')
                     UninstallString = $key.GetValue('UninstallString')
                     EstimatedSizeMB = if ($key.GetValue('EstimatedSize')) { [math]::Round($key.GetValue('EstimatedSize') / 1024, 2) } else { $null }
@@ -359,17 +433,26 @@ if ($IsMacOS) {
 # Check for Profile Updates
 function Update-Profile {
     try {
-        $env:temp = switch ($PSVersionTable.Platform) {
-            'Win32NT' { "$env:temp" }
-            'Unix' { "$HOME/.cache" }
-            default { "$HOME/.cache" }
+        # Use platform-appropriate temp directory without modifying $env:temp
+        $tempDir = if ($IsWindows) {
+            $env:TEMP
+        } else {
+            "$HOME/.cache"
         }
+
+        # Ensure temp directory exists
+        if (-not (Test-Path $tempDir)) {
+            New-Item -Path $tempDir -ItemType Directory -Force | Out-Null
+        }
+
         $url = "https://raw.githubusercontent.com/jorgeasaurus/powershell-profile/main/Microsoft.PowerShell_profile.ps1"
+        $tempProfilePath = Join-Path $tempDir "Microsoft.PowerShell_profile.ps1"
+
         $oldhash = Get-FileHash $PROFILE
-        Invoke-RestMethod $url -OutFile "$env:temp/Microsoft.PowerShell_profile.ps1"
-        $newhash = Get-FileHash "$env:temp/Microsoft.PowerShell_profile.ps1"
+        Invoke-RestMethod $url -OutFile $tempProfilePath
+        $newhash = Get-FileHash $tempProfilePath
         if ($newhash.Hash -ne $oldhash.Hash) {
-            Copy-Item -Path "$env:temp/Microsoft.PowerShell_profile.ps1" -Destination $PROFILE -Force
+            Copy-Item -Path $tempProfilePath -Destination $PROFILE -Force
             Write-Host "Profile has been updated. Please restart your shell to reflect changes" -ForegroundColor Magenta
         } else {
             Write-Host "Profile is up to date." -ForegroundColor Green
@@ -377,20 +460,59 @@ function Update-Profile {
     } catch {
         Write-Error "Unable to check for `$profile updates: $_"
     } finally {
-        Remove-Item "$env:temp/Microsoft.PowerShell_profile.ps1" -ErrorAction SilentlyContinue
+        Remove-Item $tempProfilePath -ErrorAction SilentlyContinue
     }
 }
 
-# Check if not in debug mode AND (updateInterval is -1 OR file doesn't exist OR time difference is greater than the update interval)
-if (-not $debug -and `
-    ($updateInterval -eq -1 -or `
-            -not (Test-Path $timeFilePath) -or `
-        ((Get-Date) - [datetime]::ParseExact((Get-Content -Path $timeFilePath), 'yyyy-MM-dd', $null)).TotalDays -gt $updateInterval)) {
+function Test-UpdateDue {
+    <#
+    .SYNOPSIS
+        Checks if an update is due based on the last execution time
+    .PARAMETER TimeFilePath
+        Path to the file storing the last execution timestamp
+    .PARAMETER IntervalDays
+        Number of days between updates. Use -1 to always return true.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$TimeFilePath,
 
+        [Parameter(Mandatory)]
+        [int]$IntervalDays
+    )
+
+    if ($IntervalDays -eq -1) { return $true }
+    if (-not (Test-Path $TimeFilePath)) { return $true }
+
+    try {
+        $lastCheck = [datetime]::ParseExact((Get-Content -Path $TimeFilePath), 'yyyy-MM-dd', $null)
+        return ((Get-Date).Date - $lastCheck.Date).TotalDays -gt $IntervalDays
+    } catch {
+        return $true
+    }
+}
+
+function Save-UpdateTimestamp {
+    <#
+    .SYNOPSIS
+        Saves the current date as the last update timestamp
+    .PARAMETER TimeFilePath
+        Path to the file storing the last execution timestamp
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$TimeFilePath
+    )
+
+    (Get-Date -Format 'yyyy-MM-dd') | Out-File -FilePath $TimeFilePath -Force
+}
+
+# Check for profile updates
+if (-not $debug -and (Test-UpdateDue -TimeFilePath $timeFilePath -IntervalDays $updateInterval)) {
     Update-Profile
-    $currentTime = Get-Date -Format 'yyyy-MM-dd'
-    $currentTime | Out-File -FilePath $timeFilePath -Force
-
+    Save-UpdateTimestamp -TimeFilePath $timeFilePath
 } elseif (-not $debug) {
     Write-Warning "Profile update skipped. Last update check was within the last $updateInterval day(s)."
 } else {
@@ -405,7 +527,7 @@ function Update-PowerShell {
         $gitHubApiUrl = "https://api.github.com/repos/PowerShell/PowerShell/releases/latest"
         $latestReleaseInfo = Invoke-RestMethod -Uri $gitHubApiUrl
         $latestVersion = $latestReleaseInfo.tag_name.Trim('v')
-        if ($currentVersion -lt $latestVersion) {
+        if ([Version]$currentVersion -lt [Version]$latestVersion) {
             $updateNeeded = $true
         }
 
@@ -431,16 +553,10 @@ function Update-PowerShell {
     }
 }
 
-# skip in debug mode
-# Check if not in debug mode AND (updateInterval is -1 OR file doesn't exist OR time difference is greater than the update interval)
-if (-not $debug -and `
-    ($updateInterval -eq -1 -or `
-            -not (Test-Path $timeFilePath) -or `
-        ((Get-Date).Date - [datetime]::ParseExact((Get-Content -Path $timeFilePath), 'yyyy-MM-dd', $null).Date).TotalDays -gt $updateInterval)) {
-
+# Check for PowerShell updates
+if (-not $debug -and (Test-UpdateDue -TimeFilePath $timeFilePath -IntervalDays $updateInterval)) {
     Update-PowerShell
-    $currentTime = Get-Date -Format 'yyyy-MM-dd'
-    $currentTime | Out-File -FilePath $timeFilePath -Force
+    Save-UpdateTimestamp -TimeFilePath $timeFilePath
 } elseif (-not $debug) {
     Write-Warning "PowerShell update skipped. Last update check was within the last $updateInterval day(s)."
 } else {
@@ -702,14 +818,19 @@ $scriptblock = {
 }
 Register-ArgumentCompleter -Native -CommandName dotnet -ScriptBlock $scriptblock
 
-# Get theme from profile.ps1 or use a default theme
+# Initialize Oh My Posh theme
 function Get-Theme {
-    if ($isMacOS) {
+    if ($IsMacOS) {
         $OhMyPoshCommand = "/opt/homebrew/bin/oh-my-posh"
     } elseif ($IsWindows) {
-        $OhMyPoshCommand = (Get-Command -Name 'oh-my-posh.exe' -ea 0).Source
+        $OhMyPoshCommand = (Get-Command -Name 'oh-my-posh.exe' -ErrorAction SilentlyContinue).Source
     }
-    & $OhMyPoshCommand --init --config https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_rainbow.omp.json | Invoke-Expression
+
+    if ($OhMyPoshCommand -and (Test-Path $OhMyPoshCommand -ErrorAction SilentlyContinue)) {
+        & $OhMyPoshCommand --init --config $OhMyPoshTheme | Invoke-Expression
+    } else {
+        Write-Warning "Oh My Posh not found. Skipping theme initialization."
+    }
 }
 
 # Check and install Homebrew on macOS
@@ -849,8 +970,14 @@ Use '$($PSStyle.Foreground.Magenta)Show-Help$($PSStyle.Reset)' to display this h
     Write-Host $helpText
 }
 
-if (Test-Path "$PSScriptRoot\CTTcustom.ps1") {
-    Invoke-Expression -Command "& `"$PSScriptRoot\CTTcustom.ps1`""
+# Load custom user profile if it exists (dot-sourced for security - no Invoke-Expression)
+$customProfilePath = Join-Path $PSScriptRoot "CTTcustom.ps1"
+if (Test-Path $customProfilePath) {
+    try {
+        . $customProfilePath
+    } catch {
+        Write-Warning "Failed to load custom profile '$customProfilePath': $($_.Exception.Message)"
+    }
 }
 
 Write-Host "$($PSStyle.Foreground.Yellow)Use 'Show-Help' to display help$($PSStyle.Reset)"
@@ -877,28 +1004,42 @@ function Invoke-Spongebob {
     $output
     $output = $null
 }
-function yt {
+function Search-YouTube {
+    <#
+    .SYNOPSIS
+        Opens a YouTube search in the default browser
+    .DESCRIPTION
+        Constructs a YouTube search URL from the provided search terms and opens it
+        in the default web browser.
+    .PARAMETER SearchTerms
+        The search terms to query on YouTube
+    .EXAMPLE
+        Search-YouTube powershell tutorial
+    .EXAMPLE
+        yt how to code
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Position = 0, ValueFromRemainingArguments)]
+        [string[]]$SearchTerms
+    )
 
-    begin {
-        $query = 'https://www.youtube.com/results?search_query='
+    if (-not $SearchTerms -or $SearchTerms.Count -eq 0) {
+        Write-Warning "No search terms provided. Usage: yt <search terms>"
+        return
     }
-    process {
-        Write-Host $args.Count, "Arguments detected"
-        "Parsing out Arguments: $args"
-        for ($i = 0; $i -le $args.Count; $i++) {
-            $args | ForEach-Object { "Arg $i `t $_ `t Length `t" + $_.Length, " characters"; $i++ }
-        }
 
-        $args | ForEach-Object { $query = $query + "$_+" }
-        $url = "$query"
-    }
-    end {
-        $url.Substring(0, $url.Length - 1)
-        "Final Search will be $url"
-        "Invoking..."
-        Start-Process "$url"
-    }
+    $baseUrl = 'https://www.youtube.com/results?search_query='
+    $encodedQuery = [System.Uri]::EscapeDataString($SearchTerms -join ' ')
+    $url = "$baseUrl$encodedQuery"
+
+    Write-Host "Searching YouTube for: $($SearchTerms -join ' ')" -ForegroundColor Cyan
+    Write-Host "URL: $url" -ForegroundColor DarkGray
+    Start-Process $url
 }
+
+# Alias for backward compatibility
+Set-Alias -Name yt -Value Search-YouTube
 
 function Get-InstalledModuleFast {
     param(
@@ -977,7 +1118,7 @@ function Update-Modules {
         [switch]$AllowPrerelease, # Include prerelease versions in updates
         [string]$Name = '*', # Module name filter, '*' for all modules
         [switch]$WhatIf, # Preview changes without applying them
-        [int]$ThrottleLimit = 5   # Control parallel execution limit
+        [int]$ThrottleLimit = 20   # Control parallel execution limit
     )
     
     # Initialize by getting all installed modules matching the name filter
@@ -1226,52 +1367,101 @@ function Get-StoicQuote {
     }
 }
 function Get-CredentialsFromKeyVault {
+    <#
+    .SYNOPSIS
+        Retrieves application credentials from Azure Key Vault as SecureStrings
+    .PARAMETER KeyVaultName
+        The name of the Azure Key Vault containing the credentials
+    .OUTPUTS
+        Hashtable with ClientId, ClientSecret (SecureString), and TenantId
+    #>
+    [CmdletBinding()]
     param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
         [string]$KeyVaultName
     )
 
-    # Splat common parameters for Get-AzKeyVaultSecret
-    $splat = @{
-        VaultName   = $KeyVaultName
-        AsPlainText = $true
-    }
+    try {
+        $clientId = Get-AzKeyVaultSecret -VaultName $KeyVaultName -Name "app-client-id" -AsPlainText -ErrorAction Stop
+        $clientSecretSecure = (Get-AzKeyVaultSecret -VaultName $KeyVaultName -Name "app-client-secret" -ErrorAction Stop).SecretValue
+        $tenantId = Get-AzKeyVaultSecret -VaultName $KeyVaultName -Name "tenant-id" -AsPlainText -ErrorAction Stop
 
-    $splat.Name = "app-client-id"
-    $clientId = Get-AzKeyVaultSecret @splat
-
-    $splat.Name = "app-client-secret"
-    $clientSecret = Get-AzKeyVaultSecret @splat
-
-    $splat.Name = "tenant-id"
-    $tenantId = Get-AzKeyVaultSecret @splat
-
-    return @{
-        ClientId     = $clientId
-        ClientSecret = $clientSecret
-        TenantId     = $tenantId
+        return @{
+            ClientId           = $clientId
+            ClientSecretSecure = $clientSecretSecure
+            TenantId           = $tenantId
+        }
+    } catch {
+        throw "Failed to retrieve credentials from Key Vault '$KeyVaultName': $($_.Exception.Message)"
     }
 }
 
-function graph {
-    Connect-AzAccount
+function Connect-GraphSession {
+    <#
+    .SYNOPSIS
+        Connects to Microsoft Graph using Azure Key Vault credentials
+    .DESCRIPTION
+        Securely retrieves credentials from Azure Key Vault and establishes
+        a Microsoft Graph connection. Credentials are cleaned up after use.
+    .PARAMETER KeyVaultName
+        The name of the Azure Key Vault. Defaults to 'jrgsrs-keyvault'.
+    .EXAMPLE
+        Connect-GraphSession
+    .EXAMPLE
+        Connect-GraphSession -KeyVaultName "mycompany-keyvault"
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter()]
+        [string]$KeyVaultName = "jrgsrs-keyvault"
+    )
 
-    # Function to get credentials from Key Vault
+    try {
+        # Connect to Azure if needed
+        $azContext = Get-AzContext -ErrorAction SilentlyContinue
+        if (-not $azContext) {
+            Write-Host "Connecting to Azure..." -ForegroundColor Cyan
+            Connect-AzAccount -ErrorAction Stop | Out-Null
+        }
 
+        # Retrieve credentials
+        Write-Host "Retrieving credentials from Key Vault..." -ForegroundColor Cyan
+        $creds = Get-CredentialsFromKeyVault -KeyVaultName $KeyVaultName
 
-    # Use the credentials
-    $keyVaultName = "jrgsrs-keyvault"
-    $creds = Get-CredentialsFromKeyVault -KeyVaultName $keyVaultName
+        # Build PSCredential for Graph connection
+        $credential = [PSCredential]::new($creds.ClientId, $creds.ClientSecretSecure)
 
-    # Connect to Azure using the app registration
-    $Env:AZURE_CLIENT_ID = $creds.ClientId
-    $Env:AZURE_TENANT_ID = $creds.TenantId
-    $Env:AZURE_CLIENT_SECRET = $creds.ClientSecret
-    Connect-MgGraph -EnvironmentVariable -NoWelcome
-    if ($?) {
-        Write-Host "Connected to Microsoft Graph successfully." -ForegroundColor Green
-    } else {
-        throw "Failed to connect to Microsoft Graph."
+        # Connect to Graph using client credentials (no env vars needed)
+        Write-Host "Connecting to Microsoft Graph..." -ForegroundColor Cyan
+        Connect-MgGraph -TenantId $creds.TenantId -ClientSecretCredential $credential -NoWelcome -ErrorAction Stop
+
+        # Verify connection
+        $context = Get-MgContext
+        if ($context) {
+            Write-Host "Connected to Microsoft Graph successfully as $($context.AppName)" -ForegroundColor Green
+        } else {
+            throw "Graph context is null after connection"
+        }
+    } catch {
+        Write-Error "Failed to connect to Microsoft Graph: $($_.Exception.Message)"
+    } finally {
+        # Clean up sensitive data from memory
+        if ($creds) {
+            $creds.ClientSecretSecure = $null
+            $creds = $null
+        }
+        if ($credential) {
+            $credential = $null
+        }
+        [System.GC]::Collect()
     }
+}
+
+# Backward compatibility alias
+function graph {
+    Write-Warning "The 'graph' function is deprecated. Use 'Connect-GraphSession' instead."
+    Connect-GraphSession
 }
 
 # Create an alias for easier access
@@ -1279,3 +1469,140 @@ Set-Alias -Name "stoic" -Value "Get-StoicQuote" -Description "Get a random stoic
 
 # Optional: Display a quote when the profile loads (uncomment the line below)
 Get-StoicQuote
+
+function Update-NpmPackage {
+    <#
+    .SYNOPSIS
+    Updates an npm package globally while handling ENOTEMPTY errors
+    
+    .DESCRIPTION
+    This function forcibly removes and reinstalls a global npm package to avoid
+    ENOTEMPTY errors that can occur during updates. It manually removes directories
+    and handles permission issues that prevent npm from properly cleaning up.
+    
+    .PARAMETER PackageName
+    The name of the npm package to update (e.g., "@anthropic-ai/claude-code")
+    
+    .PARAMETER Force
+    Force the operation even if warnings are encountered
+    
+    .EXAMPLE
+    Update-NpmPackage -PackageName "@anthropic-ai/claude-code"
+    
+    .EXAMPLE
+    Update-NpmPackage -PackageName "@anthropic-ai/claude-code" -Force
+    #>
+    
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$PackageName,
+        
+        [switch]$Force
+    )
+    
+    try {
+        Write-Host "Updating npm package: $PackageName" -ForegroundColor Green
+        
+        # Step 1: Get npm global directory
+        Write-Host "Finding npm global directory..." -ForegroundColor Yellow
+        $npmGlobalDir = npm root -g
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not determine npm global directory"
+        }
+        Write-Host "Global directory: $npmGlobalDir" -ForegroundColor Cyan
+        
+        # Step 2: Check if package is currently installed and get its path
+        Write-Host "Checking current installation..." -ForegroundColor Yellow
+        $packagePath = Join-Path $npmGlobalDir $PackageName
+        $packageExists = Test-Path $packagePath
+        
+        if ($packageExists) {
+            Write-Host "Package found at: $packagePath" -ForegroundColor Cyan
+        } else {
+            Write-Host "Package not currently installed globally" -ForegroundColor Yellow
+        }
+        
+        # Step 3: Force uninstall the package
+        Write-Host "Force removing existing package via npm..." -ForegroundColor Yellow
+        npm uninstall -g $PackageName --force 2>$null
+        
+        # Step 4: Manually remove the directory if it still exists
+        if (Test-Path $packagePath) {
+            Write-Host "Package directory still exists, manually removing..." -ForegroundColor Yellow
+            
+            # Try to remove with PowerShell first
+            try {
+                Remove-Item -Path $packagePath -Recurse -Force -ErrorAction Stop
+                Write-Host "Successfully removed directory with PowerShell" -ForegroundColor Green
+            } catch {
+                Write-Host "PowerShell removal failed, trying with system commands..." -ForegroundColor Yellow
+                
+                # Try with rm command (works on macOS/Linux)
+                if ($IsMacOS -or $IsLinux) {
+                    $rmResult = & rm -rf $packagePath 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Host "Successfully removed directory with rm command" -ForegroundColor Green
+                    } else {
+                        Write-Warning "rm command failed: $rmResult"
+                    }
+                }
+            }
+        }
+        
+        # Step 5: Clear npm cache
+        Write-Host "Clearing npm cache..." -ForegroundColor Yellow
+        npm cache clean --force
+        
+        # Step 6: Wait a moment for filesystem to settle
+        Start-Sleep -Seconds 2
+        
+        # Step 7: Install the package fresh
+        Write-Host "Installing package..." -ForegroundColor Yellow
+        if ($Force) {
+            $result = npm install -g $PackageName --force 2>&1
+        } else {
+            $result = npm install -g $PackageName 2>&1
+        }
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Successfully updated $PackageName" -ForegroundColor Green
+            
+            # Show the new version
+            $newVersion = npm list -g $PackageName --depth=0 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "New installation:" -ForegroundColor Cyan
+                Write-Host $newVersion -ForegroundColor White
+            }
+        } else {
+            Write-Error "Failed to install $PackageName. Exit code: $LASTEXITCODE"
+            Write-Host "npm output:" -ForegroundColor Red
+            Write-Host ($result | Out-String) -ForegroundColor Red
+            
+            # Additional troubleshooting info
+            Write-Host "`nTroubleshooting information:" -ForegroundColor Yellow
+            Write-Host "Package path: $packagePath" -ForegroundColor White
+            Write-Host "Directory exists: $(Test-Path $packagePath)" -ForegroundColor White
+            
+            if (Test-Path $packagePath) {
+                Write-Host "Directory contents:" -ForegroundColor White
+                Get-ChildItem $packagePath -Force | Format-Table Name, Length, LastWriteTime
+            }
+        }
+        
+    } catch {
+        Write-Error "An error occurred while updating the package: $($_.Exception.Message)"
+    }
+}
+
+# Helper function for common packages
+function Update-ClaudeCode {
+    <#
+    .SYNOPSIS
+    Shortcut function specifically for updating @anthropic-ai/claude-code
+    
+    .EXAMPLE
+    Update-ClaudeCode
+    #>
+    Update-NpmPackage -PackageName "@anthropic-ai/claude-code"
+}
