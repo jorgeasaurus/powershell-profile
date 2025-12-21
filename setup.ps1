@@ -1,3 +1,11 @@
+# PowerShell Core check – this script requires PowerShell 6+ (pwsh)
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+    Write-Warning "This script requires PowerShell Core (version 6 or higher)."
+    Write-Warning "You are running PowerShell $($PSVersionTable.PSVersion)."
+    Write-Warning "Please install PowerShell Core from: https://github.com/PowerShell/PowerShell"
+    break
+}
+
 # OS Check – $IsWindows, $IsMacOS are automatic variables in PowerShell Core
 # Elevated privileges check for Windows only
 if ($IsWindows) {
