@@ -1,4 +1,4 @@
-### PowerShell Profile Refactor
+﻿### PowerShell Profile Refactor
 ### Version 1.03 - Refactored
 
 $debug = $false
@@ -49,8 +49,6 @@ $OhMyPoshTheme = "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/ma
 
 # Platform-specific initialization
 if ($IsWindows) {
-    Write-Host "✅ PowerShell on Windows - PSVersion $($PSVersionTable.PSVersion)" -ForegroundColor Green
-
     # Admin Check
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
@@ -64,7 +62,6 @@ if ($IsWindows) {
     }
 } else {
     $env:USERPROFILE = $HOME
-    Write-Host "✅ PowerShell on Mac - PSVersion $($PSVersionTable.PSVersion)" -ForegroundColor Green
 }
 
 # Define the path to the file that stores the last execution time
@@ -422,7 +419,7 @@ if ($IsMacOS) {
 
         if ($FontName -like "*cascadia*") {
             $brewList = brew list --cask font-cascadia-code-nerd-font 2>$null
-            return $brewList -ne $null
+            return $null -ne $brewList
         }
         return $false
     }
@@ -863,7 +860,7 @@ if ($IsMacOS) {
 ## Final Line to set prompt
 Get-Theme
 
-function Test-CommandExists {
+function Test-CommandExist {
     param ([string]$command)
     try { return $null -ne (Get-Command $command -ErrorAction Stop) } catch { return $false }
 }
@@ -1037,10 +1034,8 @@ function Search-YouTube {
     Write-Host "URL: $url" -ForegroundColor DarkGray
     Start-Process $url
 }
-
 # Alias for backward compatibility
 Set-Alias -Name yt -Value Search-YouTube
-
 function Get-InstalledModuleFast {
     param(
         #Modules to filter for. Wildcards are supported.
@@ -1112,19 +1107,18 @@ function Get-InstalledModuleFast {
         }
     }
 }
-
-function Update-Modules {
+function Update-Module {
+    [CmdletBinding(SupportsShouldProcess)]
     param (
         [switch]$AllowPrerelease, # Include prerelease versions in updates
         [string]$Name = '*', # Module name filter, '*' for all modules
-        [switch]$WhatIf, # Preview changes without applying them
         [int]$ThrottleLimit = 20   # Control parallel execution limit
     )
-    
+
     # Initialize by getting all installed modules matching the name filter
     Write-Host ("Retrieving all installed modules ...") -ForegroundColor Green
-    [array]$CurrentModules = Get-InstalledModuleFast -Name $Name -ErrorAction SilentlyContinue | 
-    Select-Object Name, Version | 
+    [array]$CurrentModules = Get-InstalledModuleFast -Name $Name -ErrorAction SilentlyContinue |
+    Select-Object Name, Version |
     Sort-Object Name
 
     # Exit if no modules are found
@@ -1132,7 +1126,7 @@ function Update-Modules {
         Write-Host ("No modules found.") -ForegroundColor Gray
         return
     }
-    
+
     # Display initial status
     Write-Host ("{0} modules found." -f $CurrentModules.Count) -ForegroundColor Gray
     Write-Host ("Updating installed modules to the latest {0} version ..." -f $(if ($AllowPrerelease) { "PreRelease" } else { "Production" })) -ForegroundColor Green
@@ -1148,7 +1142,7 @@ function Update-Modules {
         $Module = $_
         $AllowPrerelease = $using:AllowPrerelease
         $WhatIf = $using:WhatIf
-        
+
         try {
             # Find the latest available version
             $findParams = @{
@@ -1156,9 +1150,9 @@ function Update-Modules {
                 AllowPrerelease = $AllowPrerelease
                 ErrorAction     = 'Stop'
             }
-            
+
             $latest = Find-Module @findParams | Select-Object -First 1
-            
+
             # Update only if a newer version is available
             if ($latest.Version -and $Module.Version -and ([version]$latest.Version -gt [version]$Module.Version)) {
                 $updateParams = @{
@@ -1169,10 +1163,10 @@ function Update-Modules {
                     WhatIf          = $WhatIf
                     ErrorAction     = 'Stop'
                 }
-                
+
                 Update-Module @updateParams
                 Write-Host ("Updated {0} from version {1} to {2}" -f $Module.Name, $Module.Version, $latest.Version) -ForegroundColor Yellow
-                
+
                 # Remove older versions to save disk space
                 if (-not $WhatIf) {
                     $AllVersions = Get-InstalledModule -Name $Module.Name -AllVersions | Sort-Object PublishedDate -Descending
@@ -1195,15 +1189,15 @@ function Update-Modules {
 
     # Generate summary report of all updates
     if (-not $WhatIf) {
-        $NewModules = Get-InstalledModule -Name $Name -ErrorAction SilentlyContinue | 
-        Select-Object Name, Version | 
+        $NewModules = Get-InstalledModule -Name $Name -ErrorAction SilentlyContinue |
+        Select-Object Name, Version |
         Sort-Object Name
 
         # Compare new versions with original versions
-        $UpdatedModules = $NewModules | Where-Object { 
-            $script:OldVersions[$_.Name] -ne $_.Version 
+        $UpdatedModules = $NewModules | Where-Object {
+            $script:OldVersions[$_.Name] -ne $_.Version
         }
-        
+
         # Display summary of changes
         if ($UpdatedModules) {
             Write-Host "`nUpdated modules:" -ForegroundColor Green
@@ -1215,7 +1209,6 @@ function Update-Modules {
         }
     }
 }
-
 function Show-Tree {
     [CmdletBinding(DefaultParameterSetName = 'Dirs')]
     param(
@@ -1275,41 +1268,41 @@ function Get-StoicQuote {
     <#
     .SYNOPSIS
         Retrieves a random stoic quote from an API and displays it in a formatted manner.
-    
+
     .DESCRIPTION
-        This function queries the stoic-quotes.com API to fetch a random quote from famous 
-        Stoic philosophers like Marcus Aurelius, Seneca, and Epictetus. The quote is then 
+        This function queries the stoic-quotes.com API to fetch a random quote from famous
+        Stoic philosophers like Marcus Aurelius, Seneca, and Epictetus. The quote is then
         displayed in a nicely formatted output with the author attribution.
-    
+
     .PARAMETER Raw
         Returns the raw JSON object instead of formatted text output.
-    
+
     .EXAMPLE
         Get-StoicQuote
         Displays a formatted stoic quote.
-    
+
     .EXAMPLE
         Get-StoicQuote -Raw
         Returns the raw JSON response from the API.
-    
+
     .NOTES
         This function requires an internet connection to query the API.
         API endpoint: https://stoic-quotes.com/api/quote
     #>
-    
+
     [CmdletBinding()]
     param(
         [switch]$Raw
     )
-    
+
     try {
         # API endpoint for random stoic quotes
         $apiUrl = "https://stoic-quotes.com/api/quote"
-        
+
         # Make the API request
         Write-Verbose "Fetching quote from: $apiUrl"
         $response = Invoke-RestMethod -Uri $apiUrl -Method Get -ErrorAction Stop
-        
+
         if ($Raw) {
             # Return raw JSON response
             return $response
@@ -1317,20 +1310,20 @@ function Get-StoicQuote {
             # Format and display the quote nicely
             $quote = $response.text
             $author = $response.author
-            
+
             # Create a formatted output
             Write-Host ""
             Write-Host "💭 " -ForegroundColor Yellow -NoNewline
             Write-Host "Stoic Wisdom" -ForegroundColor Cyan
             Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
             Write-Host ""
-            
+
             # Word wrap the quote if it's too long
             $maxWidth = 70
             if ($quote.Length -gt $maxWidth) {
                 $words = $quote -split '\s+'
                 $currentLine = ""
-                
+
                 foreach ($word in $words) {
                     if (($currentLine + $word).Length -gt $maxWidth) {
                         Write-Host "  $currentLine" -ForegroundColor White
@@ -1345,14 +1338,14 @@ function Get-StoicQuote {
             } else {
                 Write-Host "  $quote" -ForegroundColor White
             }
-            
+
             Write-Host ""
             Write-Host "  — $author" -ForegroundColor Green
             Write-Host ""
         }
     } catch {
         Write-Error "Failed to retrieve stoic quote: $($_.Exception.Message)"
-        
+
         # Fallback to a hardcoded quote if API fails
         Write-Host ""
         Write-Host "💭 " -ForegroundColor Yellow -NoNewline
@@ -1396,7 +1389,6 @@ function Get-CredentialsFromKeyVault {
         throw "Failed to retrieve credentials from Key Vault '$KeyVaultName': $($_.Exception.Message)"
     }
 }
-
 function Connect-GraphSession {
     <#
     .SYNOPSIS
@@ -1457,53 +1449,49 @@ function Connect-GraphSession {
         [System.GC]::Collect()
     }
 }
-
 # Backward compatibility alias
 function graph {
     Write-Warning "The 'graph' function is deprecated. Use 'Connect-GraphSession' instead."
     Connect-GraphSession
 }
-
 # Create an alias for easier access
 Set-Alias -Name "stoic" -Value "Get-StoicQuote" -Description "Get a random stoic quote"
-
 # Optional: Display a quote when the profile loads (uncomment the line below)
-Get-StoicQuote
-
+#Get-StoicQuote
 function Update-NpmPackage {
     <#
     .SYNOPSIS
     Updates an npm package globally while handling ENOTEMPTY errors
-    
+
     .DESCRIPTION
     This function forcibly removes and reinstalls a global npm package to avoid
     ENOTEMPTY errors that can occur during updates. It manually removes directories
     and handles permission issues that prevent npm from properly cleaning up.
-    
+
     .PARAMETER PackageName
     The name of the npm package to update (e.g., "@anthropic-ai/claude-code")
-    
+
     .PARAMETER Force
     Force the operation even if warnings are encountered
-    
+
     .EXAMPLE
     Update-NpmPackage -PackageName "@anthropic-ai/claude-code"
-    
+
     .EXAMPLE
     Update-NpmPackage -PackageName "@anthropic-ai/claude-code" -Force
     #>
-    
+
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$PackageName,
-        
+
         [switch]$Force
     )
-    
+
     try {
         Write-Host "Updating npm package: $PackageName" -ForegroundColor Green
-        
+
         # Step 1: Get npm global directory
         Write-Host "Finding npm global directory..." -ForegroundColor Yellow
         $npmGlobalDir = npm root -g
@@ -1511,36 +1499,36 @@ function Update-NpmPackage {
             throw "Could not determine npm global directory"
         }
         Write-Host "Global directory: $npmGlobalDir" -ForegroundColor Cyan
-        
+
         # Step 2: Check if package is currently installed and get its path
         Write-Host "Checking current installation..." -ForegroundColor Yellow
         $packagePath = Join-Path $npmGlobalDir $PackageName
         $packageExists = Test-Path $packagePath
-        
+
         if ($packageExists) {
             Write-Host "Package found at: $packagePath" -ForegroundColor Cyan
         } else {
             Write-Host "Package not currently installed globally" -ForegroundColor Yellow
         }
-        
+
         # Step 3: Force uninstall the package
         Write-Host "Force removing existing package via npm..." -ForegroundColor Yellow
         npm uninstall -g $PackageName --force 2>$null
-        
+
         # Step 4: Manually remove the directory if it still exists
         if (Test-Path $packagePath) {
             Write-Host "Package directory still exists, manually removing..." -ForegroundColor Yellow
-            
+
             # Try to remove with PowerShell first
             try {
                 Remove-Item -Path $packagePath -Recurse -Force -ErrorAction Stop
                 Write-Host "Successfully removed directory with PowerShell" -ForegroundColor Green
             } catch {
                 Write-Host "PowerShell removal failed, trying with system commands..." -ForegroundColor Yellow
-                
+
                 # Try with rm command (works on macOS/Linux)
                 if ($IsMacOS -or $IsLinux) {
-                    $rmResult = & rm -rf $packagePath 2>&1
+                    $rmResult = & Remove-Item -rf $packagePath 2>&1
                     if ($LASTEXITCODE -eq 0) {
                         Write-Host "Successfully removed directory with rm command" -ForegroundColor Green
                     } else {
@@ -1549,14 +1537,14 @@ function Update-NpmPackage {
                 }
             }
         }
-        
+
         # Step 5: Clear npm cache
         Write-Host "Clearing npm cache..." -ForegroundColor Yellow
         npm cache clean --force
-        
+
         # Step 6: Wait a moment for filesystem to settle
         Start-Sleep -Seconds 2
-        
+
         # Step 7: Install the package fresh
         Write-Host "Installing package..." -ForegroundColor Yellow
         if ($Force) {
@@ -1564,10 +1552,10 @@ function Update-NpmPackage {
         } else {
             $result = npm install -g $PackageName 2>&1
         }
-        
+
         if ($LASTEXITCODE -eq 0) {
             Write-Host "Successfully updated $PackageName" -ForegroundColor Green
-            
+
             # Show the new version
             $newVersion = npm list -g $PackageName --depth=0 2>$null
             if ($LASTEXITCODE -eq 0) {
@@ -1578,18 +1566,18 @@ function Update-NpmPackage {
             Write-Error "Failed to install $PackageName. Exit code: $LASTEXITCODE"
             Write-Host "npm output:" -ForegroundColor Red
             Write-Host ($result | Out-String) -ForegroundColor Red
-            
+
             # Additional troubleshooting info
             Write-Host "`nTroubleshooting information:" -ForegroundColor Yellow
             Write-Host "Package path: $packagePath" -ForegroundColor White
             Write-Host "Directory exists: $(Test-Path $packagePath)" -ForegroundColor White
-            
+
             if (Test-Path $packagePath) {
                 Write-Host "Directory contents:" -ForegroundColor White
                 Get-ChildItem $packagePath -Force | Format-Table Name, Length, LastWriteTime
             }
         }
-        
+
     } catch {
         Write-Error "An error occurred while updating the package: $($_.Exception.Message)"
     }
@@ -1600,9 +1588,487 @@ function Update-ClaudeCode {
     <#
     .SYNOPSIS
     Shortcut function specifically for updating @anthropic-ai/claude-code
-    
+
     .EXAMPLE
     Update-ClaudeCode
     #>
     Update-NpmPackage -PackageName "@anthropic-ai/claude-code"
 }
+
+
+
+function Get-ColoredText {
+    param(
+        [string]$Text,
+        [string]$Color
+    )
+
+    if ($NoColor) {
+        return $Text
+    }
+    return "$($script:Colors[$Color])$Text$($script:Colors.Reset)"
+}
+
+function Get-DotJustifiedLine {
+    param(
+        [string]$Key,
+        [string]$Value,
+        [int]$TargetWidth = 80
+    )
+
+    $keyLen = $Key.Length + 1 # +1 for colon
+    $valueLen = $Value.Length
+    $dotsNeeded = $TargetWidth - $keyLen - $valueLen - 2
+
+    if ($dotsNeeded -lt 1) { $dotsNeeded = 1 }
+
+    return "." * $dotsNeeded
+}
+
+function Get-SystemInfo {
+    $info = @{}
+
+    try {
+
+        if ($IsWindows) {
+            # Windows Information
+            $computerInfo = Get-ComputerInfo
+
+            # OS Information
+            $info.OS = $computerInfo.OsName
+
+            # Kernel
+            $info.Kernel = "Windows NT $($computerInfo.WindowsVersion)"
+
+            # Uptime
+            $uptime = (Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+            $days = $uptime.Days
+            $hours = $uptime.Hours
+            $mins = $uptime.Minutes
+            $uptimeStr = ""
+            if ($days -gt 0) { $uptimeStr += "$days day$($days -ne 1 ? 's' : ''), " }
+            if ($hours -gt 0) { $uptimeStr += "$hours hour$($hours -ne 1 ? 's' : ''), " }
+            $uptimeStr += "$mins min$($mins -ne 1 ? 's' : '')"
+            $info.Uptime = $uptimeStr
+
+            # Host and User
+            $info.Host = $env:COMPUTERNAME
+            $info.User = $env:USERNAME
+
+            # Shell
+            $shellName = $PSVersionTable.PSEdition -eq "Core" ? "PowerShell Core" : "PowerShell Desktop"
+            $poshVersion = $env:POSH_SHELL_VERSION ? " v$($env:POSH_SHELL_VERSION)" : ""
+            $info.Shell = "$shellName$poshVersion"
+
+            # CPU
+            $cpu = Get-CimInstance Win32_Processor
+            $info.CPU = $cpu.Name
+
+            # Model
+            $info.Model = "$($computerInfo.CsManufacturer) $($computerInfo.CsModel)".Trim()
+
+            # Memory
+            $totalMemGB = [math]::Round($computerInfo.CsTotalPhysicalMemory / 1GB, 1)
+            $info.Memory = "$totalMemGB GB"
+
+            # Disk Usage
+            $disk = Get-PSDrive -Name C
+            if ($disk) {
+                $usedGB = [math]::Round(($disk.Used / 1GB), 1)
+                $totalGB = [math]::Round(($disk.Used + $disk.Free) / 1GB, 1)
+                $info.Disk = "${usedGB}G / ${totalGB}G"
+            } else {
+                $info.Disk = "Unknown"
+            }
+
+            # Terminal
+            $terminalName = $env:WT_SESSION ? "Windows Terminal" : ($env:TERM_PROGRAM ? $env:TERM_PROGRAM : "Command Prompt")
+            $terminalVersion = $env:TERM_PROGRAM_VERSION ? " v$($env:TERM_PROGRAM_VERSION)" : ""
+            $info.Terminal = "$terminalName$terminalVersion"
+
+            # Resolution
+            try {
+                $display = Get-CimInstance -ClassName Win32_VideoController | Select-Object -First 1
+                if ($display) {
+                    $info.Resolution = "$($display.CurrentHorizontalResolution) x $($display.CurrentVerticalResolution)"
+                } else {
+                    $info.Resolution = "Unknown"
+                }
+            } catch {
+                $info.Resolution = "Unknown"
+            }
+
+            # Battery (if laptop)
+            try {
+                $battery = Get-CimInstance Win32_Battery
+                if ($battery) {
+                    $info.Battery = "$($battery.EstimatedChargeRemaining)%"
+                }
+            } catch {
+                # No battery info available (desktop)
+            }
+
+            # Admin Status
+            $info.Admin = [bool](([System.Security.Principal.WindowsPrincipal][System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) ? "Yes" : "No"
+
+            # OneDrive Location
+            $userProfile = $env:USERPROFILE
+            $oneDrivePath = "$userProfile\OneDrive"
+            if (Test-Path "$userProfile\OneDrive - *") {
+                $oneDrivePath = Get-ChildItem "$userProfile\OneDrive - *" | Select-Object -First 1 -ExpandProperty FullName
+            }
+            $info.OneDrive = $oneDrivePath
+
+            # Oh My Posh
+            try {
+                $ohMyPoshCommand = (Get-Command -Name 'oh-my-posh.exe' -ErrorAction Stop).Source
+                $ohMyPoshVersion = & $ohMyPoshCommand --version 2>$null
+                $info.OhMyPosh = $ohMyPoshVersion ? "v$ohMyPoshVersion" : "Installed"
+            } catch {
+                $info.OhMyPosh = "Not Found"
+            }
+
+            # PSReadLine History
+            $psReadLineHistory = [System.IO.Path]::Combine($oneDrivePath, 'PSReadLine', 'PSReadLineHistory.txt')
+            $info.PSReadLineHistory = if (Test-Path $psReadLineHistory) { "OneDrive" } else { "Local" }
+
+        } elseif ($IsMacOS) {
+            # macOS Information
+            # OS Information
+            $osInfo = sw_vers
+            $info.OS = "$($osInfo | Where-Object { $_ -match 'ProductName' } | ForEach-Object { $_ -replace 'ProductName:\s*', '' }) $($osInfo | Where-Object { $_ -match 'ProductVersion' } | ForEach-Object { $_ -replace 'ProductVersion:\s*', '' })"
+
+            # Kernel
+            $kernelInfo = sysctl -n kern.version
+            $kernelMatch = $kernelInfo | Select-String -Pattern 'Darwin Kernel Version (\d+\.\d+\.\d+)'
+            if ($kernelMatch) {
+                $info.Kernel = "Darwin $($kernelMatch.Matches[0].Groups[1].Value)"
+            } else {
+                $info.Kernel = "Darwin $(sysctl -n kern.osrelease)"
+            }
+
+            # Uptime
+            $uptimeOutput = Get-Uptime
+            $uptimeMatch = $uptimeOutput | Select-String -Pattern 'up\s+([^,]+)'
+            if ($uptimeMatch) {
+                $info.Uptime = $uptimeMatch.Matches[0].Groups[1].Value.Trim()
+            } else {
+                $info.Uptime = "Unknown"
+            }
+
+            # Host
+            $info.Host = hostname
+
+            # User
+            $info.User = whoami
+
+            # Shell
+            $shellName = $PSVersionTable.PSEdition -eq "Core" ? "PowerShell Core" : "PowerShell Desktop"
+            $poshVersion = $env:POSH_SHELL_VERSION ? " v$($env:POSH_SHELL_VERSION)" : ""
+            $info.Shell = "$shellName$poshVersion"
+
+            # CPU
+            $cpuInfo = sysctl -n machdep.cpu.brand_string
+            if ($cpuInfo) {
+                $info.CPU = $cpuInfo
+            } else {
+                $info.CPU = "Unknown"
+            }
+
+            # Model (macOS)
+            try {
+                $modelInfo = system_profiler SPHardwareDataType | Select-String -Pattern 'Model Name:' | ForEach-Object { $_ -replace '.*Model Name:\s*', '' }
+                $modelIdentifier = system_profiler SPHardwareDataType | Select-String -Pattern 'Model Identifier:' | ForEach-Object { $_ -replace '.*Model Identifier:\s*', '' }
+                if ($modelInfo) {
+                    $info.Model = $modelInfo.Trim()
+                } elseif ($modelIdentifier) {
+                    $info.Model = $modelIdentifier.Trim()
+                } else {
+                    $info.Model = "Unknown"
+                }
+            } catch {
+                $info.Model = "Unknown"
+            }
+
+            # Memory
+            $memInfo = sysctl -n hw.memsize
+            if ($memInfo) {
+                $totalMemGB = [math]::Round($memInfo / 1GB, 1)
+                $info.Memory = "$totalMemGB GB"
+            } else {
+                $info.Memory = "Unknown"
+            }
+
+            # Disk Usage
+            $diskInfo = df -h / | Select-Object -Skip 1
+            if ($diskInfo) {
+                $diskParts = $diskInfo -split '\s+'
+                $used = $diskParts[2]
+                $total = $diskParts[1]
+                $info.Disk = "$used / $total"
+            } else {
+                $info.Disk = "Unknown"
+            }
+
+            # Terminal
+            $terminalName = $env:TERM_PROGRAM ? $env:TERM_PROGRAM : "Unknown"
+            $terminalVersion = $env:TERM_PROGRAM_VERSION ? " v$($env:TERM_PROGRAM_VERSION)" : ""
+            $info.Terminal = "$terminalName$terminalVersion"
+
+            # Resolution (if available)
+            try {
+                $displayInfo = system_profiler SPDisplaysDataType | Select-String -Pattern 'Resolution: (\d+ x \d+)'
+                if ($displayInfo) {
+                    $info.Resolution = $displayInfo.Matches[0].Groups[1].Value
+                } else {
+                    $info.Resolution = "Unknown"
+                }
+            } catch {
+                $info.Resolution = "Unknown"
+            }
+
+            # Battery (if laptop)
+            try {
+                $batteryInfo = pmset -g batt 2>/dev/null
+                if ($batteryInfo -and $batteryInfo -notmatch "No battery available") {
+                    $batteryMatch = $batteryInfo | Select-String -Pattern '(\d+)%'
+                    if ($batteryMatch) {
+                        $info.Battery = "$($batteryMatch.Matches[0].Groups[1].Value)%"
+                    }
+                }
+            } catch {
+                # No battery info available (desktop)
+            }
+
+            # Admin Status (macOS)
+            $info.Admin = "No" # macOS PowerShell typically runs as user
+
+            # OneDrive Location (macOS)
+            $oneDrivePath = "$HOME/Library/CloudStorage/OneDrive-Personal"
+            if (Test-Path "$HOME/Library/CloudStorage/OneDrive-*") {
+                $oneDrivePath = Get-ChildItem "$HOME/Library/CloudStorage/OneDrive-*" | Select-Object -First 1 -ExpandProperty FullName
+            }
+            $info.OneDrive = $oneDrivePath
+
+            # Oh My Posh (macOS)
+            try {
+                $ohMyPoshCommand = (Get-Command -Name 'oh-my-posh' -ErrorAction Stop).Source
+                if (-not $ohMyPoshCommand) {
+                    $ohMyPoshCommand = '/opt/homebrew/bin/oh-my-posh'
+                }
+                if (Test-Path $ohMyPoshCommand) {
+                    $ohMyPoshVersion = & $ohMyPoshCommand --version 2>$null
+                    $info.OhMyPosh = $ohMyPoshVersion ? "v$ohMyPoshVersion" : "Installed"
+                } else {
+                    $info.OhMyPosh = "Not Found"
+                }
+            } catch {
+                $info.OhMyPosh = "Not Found"
+            }
+
+            # PSReadLine History (macOS)
+            $psReadLineHistory = "$oneDrivePath/PSReadLine/PSReadLineHistory.txt"
+            $info.PSReadLineHistory = if (Test-Path $psReadLineHistory) { "OneDrive" } else { "Local" }
+
+
+        } else {
+            # Linux or other Unix-like systems
+            $info.OS = "Linux/Unix (Generic)"
+            $info.Kernel = uname -r
+            $info.Uptime = Get-Uptime | ForEach-Object { $_ -replace '^.*up\s+([^,]+).*$', '$1' }
+            $info.Host = hostname
+            $info.User = whoami
+            $info.Shell = $PSVersionTable.PSEdition -eq "Core" ? "PowerShell Core" : "PowerShell Desktop"
+            $info.CPU = "Unknown"
+            $info.Memory = "Unknown"
+            $info.Disk = "Unknown"
+            $info.Terminal = $env.TERM ? $env.TERM : "Unknown"
+            $info.Resolution = "Unknown"
+
+        }
+
+    } catch {
+        Write-Warning "Error gathering system information: $_"
+    }
+
+    return $info
+}
+
+function Get-DefaultAsciiArt {
+    return @(
+        "-----------------------------------"
+        "-------------.---------------------"
+        "------------.........---.----------"
+        "-----------................--------"
+        "---------...................-------"
+        "--------...-+###+++---......-------"
+        "-------..+#########+++--....--++---"
+        "-------.+##########+++----...-++++-"
+        "-------+###########+++----...-+++++"
+        "-------+############++----...-+++++"
+        "---++-+############+++-----.-++++++"
+        "-++++++##+-----++--......----++++++"
+        "+++++++#+---..-+#+........----+++++"
+        "+++++++###++++###+-------------++--"
+        "+++++#+##########+--++++----.--+++-"
+        "++++++++#######++---+++----..-+++++"
+        "+++++##+#######--...------..-++++++"
+        "+++++++-+####+-......----..-###++++"
+        "+++++++--++-..-----........-#####++"
+        "++++++++-.-..---.............-####+"
+        "+++++++-......-................-###"
+        "++++++-.........................+##"
+        "+++++............................##"
+        "++++.....-+-.....................-+"
+        "+++......-###-....................."
+    )
+}
+
+function Show-SystemNeofetch {
+    [CmdletBinding()]
+    param(
+        [switch]$NoColor,
+        [string]$CustomAscii
+    )
+
+    # ANSI color codes
+    $script:Colors = @{
+        Reset  = "`e[0m"
+        Bold   = "`e[1m"
+        # Foreground
+        Orange = "`e[38;5;214m"
+        Blue   = "`e[38;5;117m"
+        Green  = "`e[38;5;114m"
+        Red    = "`e[38;5;203m"
+        Gray   = "`e[38;5;244m"
+        White  = "`e[38;5;255m"
+        Cyan   = "`e[38;5;81m"
+        Yellow = "`e[38;5;227m"
+        Purple = "`e[38;5;141m"
+    }
+
+    # Get system information
+    $sysInfo = Get-SystemInfo
+
+    # Get ASCII art
+    $asciiLines = if ($CustomAscii -and (Test-Path $CustomAscii)) {
+        Get-Content $CustomAscii
+    } else {
+        Get-DefaultAsciiArt
+    }
+
+    # Build info lines
+    $infoLines = @()
+
+    # Header with user@host
+    $separator = "-" * 80
+    $userHost = "$($sysInfo.User)@$($sysInfo.Host)"
+    $infoLines += "$(Get-ColoredText $userHost 'Cyan')"
+    $infoLines += Get-ColoredText $separator 'Gray'
+
+    # System Information
+    $systemInfo = [ordered]@{
+        "OS"       = $sysInfo.OS
+        "Kernel"   = $sysInfo.Kernel
+        "Uptime"   = $sysInfo.Uptime
+        "Shell"    = $sysInfo.Shell
+        "Terminal" = $sysInfo.Terminal
+    }
+
+    # Add additional info if available
+    if ($sysInfo.Admin) {
+        $systemInfo["Admin"] = $sysInfo.Admin
+    }
+    if ($sysInfo.OhMyPosh) {
+        $systemInfo["OhMyPosh"] = $sysInfo.OhMyPosh
+    }
+    if ($sysInfo.OneDrive) {
+        $systemInfo["OneDrive"] = $sysInfo.OneDrive
+    }
+    if ($sysInfo.PSReadLineHistory) {
+        $systemInfo["PSReadLine"] = $sysInfo.PSReadLineHistory
+    }
+
+    foreach ($key in $systemInfo.Keys) {
+        $value = $systemInfo[$key]
+        if ($value) {
+            $dots = Get-DotJustifiedLine -Key $key -Value $value
+            $coloredKey = Get-ColoredText $key 'Orange'
+            $coloredDots = Get-ColoredText " $dots " 'Gray'
+            $coloredValue = Get-ColoredText $value 'Blue'
+            $infoLines += "$coloredKey`:$coloredDots$coloredValue"
+        }
+    }
+
+    # Hardware Information
+    $infoLines += ""
+    $infoLines += Get-ColoredText "- Hardware $('-' * 69)" 'White'
+
+    $hardwareInfo = [ordered]@{
+        "CPU"    = $sysInfo.CPU
+        "Memory" = $sysInfo.Memory
+        "Disk"   = $sysInfo.Disk
+    }
+
+    if ($sysInfo.Model -and $sysInfo.Model -ne "Unknown") {
+        $hardwareInfo["Model"] = $sysInfo.Model
+    }
+
+    if ($sysInfo.Resolution -and $sysInfo.Resolution -ne "Unknown") {
+        $hardwareInfo["Resolution"] = $sysInfo.Resolution
+    }
+
+    if ($sysInfo.Battery) {
+        $hardwareInfo["Battery"] = $sysInfo.Battery
+    }
+
+    foreach ($key in $hardwareInfo.Keys) {
+        $value = $hardwareInfo[$key]
+        if ($value) {
+            $dots = Get-DotJustifiedLine -Key $key -Value $value
+            $coloredKey = Get-ColoredText $key 'Orange'
+            $coloredDots = Get-ColoredText " $dots " 'Gray'
+            $coloredValue = Get-ColoredText $value 'Blue'
+            $infoLines += "$coloredKey`:$coloredDots$coloredValue"
+        }
+    }
+
+
+    # Color palette line
+    $infoLines += ""
+    $palette = ""
+    foreach ($i in 0..7) {
+        $palette += "`e[48;5;${i}m "
+    }
+    $palette += "`e[0m"
+    $infoLines += $palette
+
+    # Combine ASCII art with info
+    $maxAsciiWidth = ($asciiLines | Measure-Object -Property Length -Maximum).Maximum
+    $padding = 4 # Space between ASCII and info
+
+    $totalLines = [Math]::Max($asciiLines.Count, $infoLines.Count)
+
+    Write-Host ""
+    for ($i = 0; $i -lt $totalLines; $i++) {
+        $asciiLine = if ($i -lt $asciiLines.Count) { $asciiLines[$i] } else { "" }
+        $infoLine = if ($i -lt $infoLines.Count) { $infoLines[$i] } else { "" }
+
+        # Colorize ASCII art (using cyan for the art)
+        $coloredAscii = if ($NoColor) {
+            $asciiLine.PadRight($maxAsciiWidth)
+        } else {
+            $asciiLine = $asciiLine -replace 'M', "$(Get-ColoredText 'M' 'Cyan')"
+            $asciiLine = $asciiLine -replace '\.', "$(Get-ColoredText '.' 'Blue')"
+            # Pad to align
+            $rawLen = ($asciiLines[$i] ?? "").Length
+            $padNeeded = $maxAsciiWidth - $rawLen
+            $asciiLine + (" " * [Math]::Max(0, $padNeeded))
+        }
+
+        Write-Host "$coloredAscii$(' ' * $padding)$infoLine"
+    }
+    Write-Host ""
+}
+
+Show-SystemNeofetch
