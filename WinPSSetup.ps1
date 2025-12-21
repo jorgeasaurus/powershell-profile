@@ -1,4 +1,3 @@
-#Requires -Version 5.1
 # irm 'https://github.com/jorgeasaurus/powershell-profile/raw/main/WinPSSetup.ps1' | iex
 $ScriptUrl = 'https://github.com/jorgeasaurus/powershell-profile/raw/main/WinPSSetup.ps1'  # Set this to where you host this script
 
