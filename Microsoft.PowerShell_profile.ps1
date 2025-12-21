@@ -294,7 +294,11 @@ if ($IsWindows) {
     }
 
     function sys {
-        Start-Process -FilePath cmd.exe -Verb Runas -ArgumentList '/k C:\Windows\System32\PsExec.exe -i -accepteula -s powershell.exe'
+        if (-not (Get-Command PsExec -ErrorAction SilentlyContinue)) {
+            Write-Warning "PsExec not found. Please download PsExec from https://docs.microsoft.com/en-us/sysinternals/downloads/psexec and place it in a folder included in your PATH."
+            return
+        }
+        Start-Process -FilePath cmd.exe -Verb Runas -ArgumentList '/k PsExec -i -accepteula -s powershell.exe'
     }
 
     function Search-RegistryUninstallKey {
