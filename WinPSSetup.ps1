@@ -43,6 +43,8 @@ if (Test-Path $wtSettingsPath) {
         $settings.profiles.defaults | Add-Member -NotePropertyName 'font' -NotePropertyValue @{} -Force
     }
     $settings.profiles.defaults.font | Add-Member -NotePropertyName 'face' -NotePropertyValue 'CaskaydiaCove Nerd Font Mono' -Force
+    $settings.profiles.defaults | Add-Member -NotePropertyName 'opacity' -NotePropertyValue 87 -Force
+    $settings.profiles.defaults | Add-Member -NotePropertyName 'useAcrylic' -NotePropertyValue $false -Force
 
     $settings | ConvertTo-Json -Depth 100 | Set-Content $wtSettingsPath -Encoding UTF8
     Write-Host 'Windows Terminal configured: PowerShell Core default, CaskaydiaCove Nerd Font Mono set.' -ForegroundColor Green
