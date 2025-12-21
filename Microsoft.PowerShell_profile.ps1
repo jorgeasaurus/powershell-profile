@@ -1111,7 +1111,7 @@ function Get-InstalledModuleFast {
         }
     }
 }
-function Update-Module {
+function Update-Modules {
     [CmdletBinding(SupportsShouldProcess)]
     param (
         [switch]$AllowPrerelease, # Include prerelease versions in updates
