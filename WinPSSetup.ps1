@@ -11,7 +11,7 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 # Bootstrap to PowerShell Core
 if ($PSVersionTable.PSEdition -ne 'Core') {
     if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) {
-        winget install -e --id Microsoft.PowerShell --accept-package-agreements --accept-source-agreements
+        winget install -e --id Microsoft.PowerShell --accept-package-agreements --accept-source-agreements --source winget
         $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User')
     }
     
