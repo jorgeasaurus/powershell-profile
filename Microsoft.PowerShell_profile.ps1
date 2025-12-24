@@ -1146,11 +1146,14 @@ function Update-Modules {
         $script:OldVersions[$Module.Name] = $Module.Version
     }
 
+    # Capture WhatIf preference before parallel execution
+    $WhatIfEnabled = $WhatIfPreference.IsPresent
+
     # Process updates in parallel for better performance
     $CurrentModules | ForEach-Object -Parallel {
         $Module = $_
         $AllowPrerelease = $using:AllowPrerelease
-        $WhatIf = $using:WhatIf
+        $WhatIf = $using:WhatIfEnabled
 
         try {
             # Find the latest available version
@@ -1197,7 +1200,7 @@ function Update-Modules {
     } -ThrottleLimit $ThrottleLimit
 
     # Generate summary report of all updates
-    if (-not $WhatIf) {
+    if (-not $WhatIfEnabled) {
         $NewModules = Get-InstalledModule -Name $Name -ErrorAction SilentlyContinue |
         Select-Object Name, Version |
         Sort-Object Name
