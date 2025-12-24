@@ -21,8 +21,8 @@ if ($PSVersionTable.PSEdition -ne 'Core') {
 
 # === Core-only execution below ===
 winget install -e --id Microsoft.Sysinternals.PsTools --accept-package-agreements --accept-source-agreements --source winget
-irm "https://github.com/jorgeasaurus/powershell-profile/raw/main/setup.ps1" | iex
-irm https://raw.githubusercontent.com/jorgeasaurus/cmtrace/refs/heads/main/New-CMTraceSymLink.ps1 | iex
+Invoke-RestMethod "https://github.com/jorgeasaurus/powershell-profile/raw/main/setup.ps1" | Invoke-Expression
+Invoke-RestMethod https://raw.githubusercontent.com/jorgeasaurus/cmtrace/refs/heads/main/New-CMTraceSymLink.ps1 | Invoke-Expression
 
 # Configure Windows Terminal defaults
 $wtSettingsPath = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
@@ -48,7 +48,6 @@ if (Test-Path $wtSettingsPath) {
 
     $settings | ConvertTo-Json -Depth 100 | Set-Content $wtSettingsPath -Encoding UTF8
     Write-Host 'Windows Terminal configured: PowerShell Core default, CaskaydiaCove Nerd Font Mono set.' -ForegroundColor Green
-}
-else {
+} else {
     Write-Warning 'Windows Terminal settings not found. Skipping terminal configuration.'
 }

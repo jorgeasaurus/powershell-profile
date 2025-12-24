@@ -110,7 +110,7 @@ if (!(Test-Path -Path $PROFILE -PathType Leaf)) {
 # Oh My Posh Installation
 if ($IsWindows) {
     try {
-        winget install -e --accept-source-agreements --accept-package-agreements JanDeDobbeleer.OhMyPosh
+        winget install -e --accept-source-agreements --accept-package-agreements JanDeDobbeleer.OhMyPosh --source winget
     } catch {
         Write-Error "Failed to install Oh My Posh. Error: $_"
     }
@@ -165,21 +165,4 @@ try {
     Install-Module -Name Terminal-Icons -Repository PSGallery -Force
 } catch {
     Write-Error "Failed to install Terminal Icons module. Error: $_"
-}
-
-# zoxide Installation
-if ($IsWindows) {
-    try {
-        winget install -e --id ajeetdsouza.zoxide
-        Write-Host "zoxide installed successfully."
-    } catch {
-        Write-Error "Failed to install zoxide. Error: $_"
-    }
-} elseif ($IsMacOS) {
-    try {
-        /opt/homebrew/bin/brew install zoxide
-        Write-Host "zoxide installed successfully on macOS."
-    } catch {
-        Write-Error "Failed to install zoxide on macOS. Error: $_"
-    }
 }
