@@ -1221,6 +1221,167 @@ function Update-Modules {
         }
     }
 }
+
+function Install-LatestModule {
+    <#
+    .SYNOPSIS
+        Removes all existing versions of a module and installs the latest version.
+
+    .DESCRIPTION
+        This function uninstalls all existing versions of specified modules and then
+        installs the latest version from the PowerShell Gallery. Useful when you get
+        warnings about side-by-side installations.
+
+    .PARAMETER Name
+        The name of the module(s) to reinstall. Accepts wildcards and pipeline input.
+
+    .PARAMETER AllowPrerelease
+        Include prerelease versions when finding the latest version.
+
+    .PARAMETER Force
+        Skip confirmation prompts.
+
+    .EXAMPLE
+        Install-LatestModule -Name Pester
+        Removes all versions of Pester and installs the latest.
+
+    .EXAMPLE
+        'PSReadLine', 'Pester' | Install-LatestModule -Force
+        Reinstalls both modules without prompts.
+
+    .EXAMPLE
+        ls ~/.local/share/powershell/Modules | Install-LatestModule
+        Reinstalls all modules in the user modules directory.
+    #>
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
+    param (
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('ModuleName', 'PSChildName')]
+        [string[]]$Name,
+
+        [switch]$AllowPrerelease,
+
+        [switch]$Force
+    )
+
+    begin {
+        Write-Host "Installing latest versions of modules..." -ForegroundColor Green
+    }
+
+    process {
+        foreach ($ModuleName in $Name) {
+            try {
+                # Get all installed versions
+                $installedVersions = Get-InstalledModule -Name $ModuleName -AllVersions -ErrorAction SilentlyContinue
+
+                if (-not $installedVersions) {
+                    Write-Warning "Module '$ModuleName' is not installed via PowerShellGet. Attempting to install..."
+
+                    # Try to install if not found
+                    $installParams = @{
+                        Name            = $ModuleName
+                        AllowPrerelease = $AllowPrerelease
+                        AcceptLicense   = $true
+                        Force           = $true
+                        ErrorAction     = 'Stop'
+                    }
+
+                    if ($PSCmdlet.ShouldProcess($ModuleName, "Install latest version")) {
+                        Install-Module @installParams
+                        Write-Host "Installed $ModuleName" -ForegroundColor Green
+                    }
+                    continue
+                }
+
+                # Find the latest version available
+                $findParams = @{
+                    Name            = $ModuleName
+                    AllowPrerelease = $AllowPrerelease
+                    ErrorAction     = 'Stop'
+                }
+
+                $latest = Find-Module @findParams | Select-Object -First 1
+                $currentVersions = $installedVersions.Version -join ', '
+
+                # Check if already at latest version and only one version installed
+                if ($installedVersions.Count -eq 1 -and $installedVersions[0].Version -eq $latest.Version) {
+                    Write-Host "`nModule: $ModuleName" -ForegroundColor Cyan
+                    Write-Host "  Already at latest version $($latest.Version)" -ForegroundColor Green
+                    continue
+                }
+
+                Write-Host "`nModule: $ModuleName" -ForegroundColor Cyan
+                Write-Host "  Current versions: $currentVersions" -ForegroundColor Gray
+                Write-Host "  Latest version: $($latest.Version)" -ForegroundColor Yellow
+
+                # Determine if we should proceed
+                $shouldProceed = $Force -or $PSCmdlet.ShouldProcess(
+                    "$ModuleName (uninstall $($installedVersions.Count) version(s) and install $($latest.Version))",
+                    "Remove all versions and install latest"
+                )
+
+                if ($shouldProceed) {
+                    # Uninstall all existing versions
+                    foreach ($version in $installedVersions) {
+                        try {
+                            Uninstall-Module -Name $ModuleName -RequiredVersion $version.Version -Force -ErrorAction Stop
+                            Write-Host "  Uninstalled version $($version.Version)" -ForegroundColor Gray
+                        } catch {
+                            # If Uninstall-Module fails, try manual removal
+                            Write-Warning "Failed to uninstall $ModuleName version $($version.Version): $($_.Exception.Message)"
+                            Write-Host "  Attempting manual removal..." -ForegroundColor Yellow
+
+                            try {
+                                # Try to get the module installation path from InstalledLocation first
+                                $modulePath = $version.InstalledLocation
+
+                                # If InstalledLocation is not available, construct the path manually
+                                if (-not $modulePath -or -not (Test-Path $modulePath)) {
+                                    # Try common module paths
+                                    $possiblePaths = @(
+                                        (Join-Path $HOME ".local/share/powershell/Modules/$ModuleName/$($version.Version)")
+                                        (Join-Path $env:ProgramFiles "PowerShell/Modules/$ModuleName/$($version.Version)")
+                                        (Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell/Modules/$ModuleName/$($version.Version)")
+                                    )
+
+                                    $modulePath = $possiblePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+                                }
+
+                                if ($modulePath -and (Test-Path $modulePath)) {
+                                    Remove-Item -Path $modulePath -Recurse -Force -ErrorAction Stop
+                                    Write-Host "  Manually removed version $($version.Version) from $modulePath" -ForegroundColor Gray
+                                } else {
+                                    Write-Warning "Could not find installation path for $ModuleName version $($version.Version)"
+                                }
+                            } catch {
+                                Write-Warning "Manual removal also failed: $($_.Exception.Message)"
+                            }
+                        }
+                    }
+
+                    # Install the latest version
+                    $installParams = @{
+                        Name            = $ModuleName
+                        AllowPrerelease = $AllowPrerelease
+                        AcceptLicense   = $true
+                        Force           = $true
+                        ErrorAction     = 'Stop'
+                    }
+
+                    Install-Module @installParams
+                    Write-Host "  Installed version $($latest.Version)" -ForegroundColor Green
+                }
+            } catch {
+                Write-Error "Failed to process module '$ModuleName': $($_.Exception.Message)"
+            }
+        }
+    }
+
+    end {
+        Write-Host "`nModule reinstallation complete." -ForegroundColor Green
+    }
+}
+
 function Show-Tree {
     [CmdletBinding(DefaultParameterSetName = 'Dirs')]
     param(
