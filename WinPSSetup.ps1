@@ -20,7 +20,7 @@ if ($PSVersionTable.PSEdition -ne 'Core') {
 }
 
 # === Core-only execution below ===
-winget install -e --id Microsoft.Sysinternals.PsTools --accept-package-agreements --accept-source-agreements
+winget install -e --id Microsoft.Sysinternals.PsTools --accept-package-agreements --accept-source-agreements --source winget
 irm "https://github.com/jorgeasaurus/powershell-profile/raw/main/setup.ps1" | iex
 irm https://raw.githubusercontent.com/jorgeasaurus/cmtrace/refs/heads/main/New-CMTraceSymLink.ps1 | iex
 
