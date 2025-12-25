@@ -47,6 +47,9 @@ if (Test-Path ~/Library/CloudStorage/OneDrive-Personal) {
 # Oh My Posh theme configuration
 $OhMyPoshTheme = "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_rainbow.omp.json"
 
+# Extra: Price tracking configuration
+$UserStockSymbol = "AAPL"  # Change this to your preferred stock symbol (e.g., "TSLA", "MSFT", "GOOGL")
+
 # Platform-specific initialization
 if ($IsWindows) {
     # Admin Check
@@ -2206,6 +2209,41 @@ function Show-SystemNeofetch {
         }
     }
 
+    # Extra: Price Information
+    $infoLines += ""
+    $infoLines += Get-ColoredText "- Extra $('-' * 72)" 'White'
+
+    # Fetch prices with error handling
+    try {
+        $cryptoPrices = Get-CryptoPrice -Symbol BTC, ETH -ErrorAction SilentlyContinue
+        $stockPrices = Get-StockPrice -Symbol $UserStockSymbol -ErrorAction SilentlyContinue
+
+        foreach ($crypto in $cryptoPrices) {
+            $changeSymbol = if ($crypto.Change24h -ge 0) { '▲' } else { '▼' }
+            $changeColor = if ($crypto.Change24h -ge 0) { 'Green' } else { 'Red' }
+            $changeSign = if ($crypto.Change24h -ge 0) { '+' } else { '' }
+            $value = "`${0:N2} {1} {2}{3:N2}%" -f $crypto.Price, $changeSymbol, $changeSign, $crypto.Change24h
+            $dots = Get-DotJustifiedLine -Key $crypto.Symbol -Value $value
+            $coloredKey = Get-ColoredText $crypto.Symbol 'Orange'
+            $coloredDots = Get-ColoredText " $dots " 'Gray'
+            $coloredValue = Get-ColoredText $value $changeColor
+            $infoLines += "$coloredKey`:$coloredDots$coloredValue"
+        }
+
+        foreach ($stock in $stockPrices) {
+            $changeSymbol = if ($stock.Change -ge 0) { '▲' } else { '▼' }
+            $changeColor = if ($stock.Change -ge 0) { 'Green' } else { 'Red' }
+            $changeSign = if ($stock.Change -ge 0) { '+' } else { '' }
+            $value = "`${0:N2} {1} {2}{3:N2}%" -f $stock.Price, $changeSymbol, $changeSign, $stock.ChangePercent
+            $dots = Get-DotJustifiedLine -Key $stock.Symbol -Value $value
+            $coloredKey = Get-ColoredText $stock.Symbol 'Orange'
+            $coloredDots = Get-ColoredText " $dots " 'Gray'
+            $coloredValue = Get-ColoredText $value $changeColor
+            $infoLines += "$coloredKey`:$coloredDots$coloredValue"
+        }
+    } catch {
+        # Silently skip if price fetching fails (e.g., no internet)
+    }
 
     # Color palette line
     $infoLines += ""
@@ -2244,4 +2282,230 @@ function Show-SystemNeofetch {
     Write-Host ""
 }
 
+#################################################################################################################################
+############                                                                                                         ############
+############                                            EXTRA SECTION                                                ############
+############                                     Live Price Tracking Functions                                       ############
+############                                                                                                         ############
+#################################################################################################################################
+
+function Get-CryptoPrice {
+    <#
+    .SYNOPSIS
+        Gets current cryptocurrency prices from CoinGecko API.
+
+    .DESCRIPTION
+        Retrieves real-time price data for cryptocurrencies including current price,
+        24-hour change, and market cap from the CoinGecko API.
+
+    .PARAMETER Symbol
+        Cryptocurrency symbol(s) to query (e.g., BTC, ETH, SOL).
+
+    .EXAMPLE
+        Get-CryptoPrice -Symbol BTC
+        Gets Bitcoin price.
+
+    .EXAMPLE
+        Get-CryptoPrice -Symbol BTC, ETH, SOL
+        Gets multiple cryptocurrency prices.
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(ValueFromPipeline)]
+        [string[]]$Symbol = @('BTC', 'ETH')
+    )
+
+    begin {
+        $results = @()
+    }
+
+    process {
+        foreach ($coin in $Symbol) {
+            try {
+                # Map common symbols to CoinGecko IDs
+                $coinMap = @{
+                    'BTC' = 'bitcoin'
+                    'ETH' = 'ethereum'
+                    'SOL' = 'solana'
+                    'ADA' = 'cardano'
+                    'DOT' = 'polkadot'
+                    'MATIC' = 'matic-network'
+                    'AVAX' = 'avalanche-2'
+                    'LINK' = 'chainlink'
+                    'UNI' = 'uniswap'
+                    'DOGE' = 'dogecoin'
+                }
+
+                $coinId = if ($coinMap.ContainsKey($coin.ToUpper())) {
+                    $coinMap[$coin.ToUpper()]
+                } else {
+                    $coin.ToLower()
+                }
+
+                $url = "https://api.coingecko.com/api/v3/simple/price?ids=$coinId&vs_currencies=usd&include_24hr_change=true&include_market_cap=true"
+                $response = Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 5 -ErrorAction Stop
+
+                if ($response.$coinId) {
+                    $results += [PSCustomObject]@{
+                        Symbol = $coin.ToUpper()
+                        Price = $response.$coinId.usd
+                        Change24h = $response.$coinId.usd_24h_change
+                        MarketCap = $response.$coinId.usd_market_cap
+                    }
+                }
+            } catch {
+                Write-Warning "Failed to fetch price for $coin`: $($_.Exception.Message)"
+            }
+        }
+    }
+
+    end {
+        return $results
+    }
+}
+
+function Get-StockPrice {
+    <#
+    .SYNOPSIS
+        Gets current stock price from Yahoo Finance.
+
+    .DESCRIPTION
+        Retrieves real-time stock price data including current price, change,
+        and percent change from Yahoo Finance API.
+
+    .PARAMETER Symbol
+        Stock symbol(s) to query (e.g., AAPL, TSLA, MSFT).
+
+    .EXAMPLE
+        Get-StockPrice -Symbol AAPL
+        Gets Apple stock price.
+
+    .EXAMPLE
+        Get-StockPrice -Symbol AAPL, TSLA, MSFT
+        Gets multiple stock prices.
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(ValueFromPipeline)]
+        [string[]]$Symbol = $UserStockSymbol
+    )
+
+    begin {
+        $results = @()
+    }
+
+    process {
+        foreach ($stock in $Symbol) {
+            try {
+                $url = "https://query1.finance.yahoo.com/v8/finance/chart/$($stock.ToUpper())?interval=1d&range=1d"
+                $response = Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 5 -ErrorAction Stop
+
+                if ($response.chart.result) {
+                    $data = $response.chart.result[0]
+                    $quote = $data.meta
+                    $currentPrice = $quote.regularMarketPrice
+                    $previousClose = $quote.previousClose
+
+                    # Calculate change safely
+                    $change = if ($previousClose -and $previousClose -ne 0) {
+                        $currentPrice - $previousClose
+                    } else {
+                        0
+                    }
+
+                    # Calculate percent change safely
+                    $changePercent = if ($previousClose -and $previousClose -ne 0) {
+                        (($currentPrice - $previousClose) / $previousClose) * 100
+                    } else {
+                        0
+                    }
+
+                    $results += [PSCustomObject]@{
+                        Symbol = $stock.ToUpper()
+                        Price = $currentPrice
+                        Change = $change
+                        ChangePercent = $changePercent
+                        MarketState = $quote.marketState
+                    }
+                }
+            } catch {
+                Write-Warning "Failed to fetch price for $stock`: $($_.Exception.Message)"
+            }
+        }
+    }
+
+    end {
+        return $results
+    }
+}
+
+function Show-PriceSnapshot {
+    <#
+    .SYNOPSIS
+        Displays a formatted snapshot of cryptocurrency and stock prices.
+
+    .DESCRIPTION
+        Shows live prices for BTC, ETH, and a user-configured stock symbol
+        in a clean, formatted table with color-coded changes.
+
+    .PARAMETER StockSymbol
+        Optional stock symbol to override the default from $UserStockSymbol.
+
+    .EXAMPLE
+        Show-PriceSnapshot
+        Shows default price snapshot.
+
+    .EXAMPLE
+        Show-PriceSnapshot -StockSymbol TSLA
+        Shows prices with Tesla stock instead of default.
+    #>
+    [CmdletBinding()]
+    param (
+        [string]$StockSymbol = $UserStockSymbol
+    )
+
+    Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+    Write-Host "              LIVE PRICE SNAPSHOT" -ForegroundColor Cyan
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+
+    # Get crypto prices
+    Write-Host "`n  Cryptocurrencies:" -ForegroundColor Yellow
+    $cryptoPrices = Get-CryptoPrice -Symbol BTC, ETH
+
+    foreach ($crypto in $cryptoPrices) {
+        $priceFormatted = "{0:N2}" -f $crypto.Price
+        $changeColor = if ($crypto.Change24h -ge 0) { 'Green' } else { 'Red' }
+        $changeSymbol = if ($crypto.Change24h -ge 0) { '▲' } else { '▼' }
+        $changeSign = if ($crypto.Change24h -ge 0) { '+' } else { '' }
+
+        Write-Host "    $($crypto.Symbol.PadRight(6))" -NoNewline -ForegroundColor Cyan
+        Write-Host "$" -NoNewline
+        Write-Host $priceFormatted.PadLeft(12) -NoNewline -ForegroundColor White
+        Write-Host "  $changeSymbol " -NoNewline -ForegroundColor $changeColor
+        Write-Host ("{0}{1:N2}%" -f $changeSign, $crypto.Change24h).PadLeft(8) -ForegroundColor $changeColor
+    }
+
+    # Get stock price
+    Write-Host "`n  Stocks:" -ForegroundColor Yellow
+    $stockPrices = Get-StockPrice -Symbol $StockSymbol
+
+    foreach ($stock in $stockPrices) {
+        $priceFormatted = "{0:N2}" -f $stock.Price
+        $changeColor = if ($stock.Change -ge 0) { 'Green' } else { 'Red' }
+        $changeSymbol = if ($stock.Change -ge 0) { '▲' } else { '▼' }
+        $changeSign = if ($stock.Change -ge 0) { '+' } else { '' }
+
+        Write-Host "    $($stock.Symbol.PadRight(6))" -NoNewline -ForegroundColor Cyan
+        Write-Host "$" -NoNewline
+        Write-Host $priceFormatted.PadLeft(12) -NoNewline -ForegroundColor White
+        Write-Host "  $changeSymbol " -NoNewline -ForegroundColor $changeColor
+        Write-Host ("{0}{1:N2} ({2}{3:N2}%)" -f $changeSign, $stock.Change, $changeSign, $stock.ChangePercent).PadLeft(18) -ForegroundColor $changeColor
+    }
+
+    Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+    Write-Host "  Updated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor DarkGray
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" -ForegroundColor DarkGray
+}
+
+Clear-Host
 Show-SystemNeofetch
