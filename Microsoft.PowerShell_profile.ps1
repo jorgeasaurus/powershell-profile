@@ -1924,11 +1924,17 @@ function Get-SystemInfo {
             }
 
             # Uptime
-            $uptimeOutput = Get-Uptime
-            $uptimeMatch = $uptimeOutput | Select-String -Pattern 'up\s+([^,]+)'
-            if ($uptimeMatch) {
-                $info.Uptime = $uptimeMatch.Matches[0].Groups[1].Value.Trim()
-            } else {
+            try {
+                $uptime = Get-Uptime
+                $days = $uptime.Days
+                $hours = $uptime.Hours
+                $mins = $uptime.Minutes
+                $uptimeStr = ""
+                if ($days -gt 0) { $uptimeStr += "$days day$($days -ne 1 ? 's' : ''), " }
+                if ($hours -gt 0) { $uptimeStr += "$hours hour$($hours -ne 1 ? 's' : ''), " }
+                $uptimeStr += "$mins min$($mins -ne 1 ? 's' : '')"
+                $info.Uptime = $uptimeStr
+            } catch {
                 $info.Uptime = "Unknown"
             }
 
