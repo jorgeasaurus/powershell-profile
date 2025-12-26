@@ -1,6 +1,8 @@
 # irm 'https://github.com/jorgeasaurus/powershell-profile/raw/main/WinPSSetup.ps1' | iex
 $ScriptUrl = 'https://github.com/jorgeasaurus/powershell-profile/raw/main/WinPSSetup.ps1'
 
+iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI"
+
 # Self-elevate if not admin
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     $shell = if ($PSVersionTable.PSEdition -eq 'Core') { 'pwsh' } else { 'powershell' }
@@ -18,6 +20,14 @@ if ($PSVersionTable.PSEdition -ne 'Core') {
     pwsh -NoProfile -ExecutionPolicy Bypass -Command "irm '$ScriptUrl' | iex"
     exit
 }
+
+Set-ExecutionPolicy Bypass -Force
+Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+
+Install-Module PSPreworkout -Force  -AllowClobber
+Import-Module PSPreworkout -Force
+
+Install-WinGet
 
 # === Core-only execution below ===
 winget install -e --id Microsoft.Sysinternals.PsTools --accept-package-agreements --accept-source-agreements --source winget
