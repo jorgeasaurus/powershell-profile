@@ -2,7 +2,7 @@
 ### Version 1.03 - Refactored
 
 $debug = $false
-
+$isVSCode = ($env:TERM_PROGRAM -eq 'vscode')
 # Define the update interval in days, set to -1 to always check
 $updateInterval = 7
 
@@ -2514,4 +2514,6 @@ function Show-PriceSnapshot {
 }
 
 Clear-Host
-Show-SystemNeofetch
+if (-not$isVSCode) {
+    Show-SystemNeofetch
+}
