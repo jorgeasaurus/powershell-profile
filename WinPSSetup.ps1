@@ -163,34 +163,44 @@ try {
 
 # === Core-only execution below ===
 
+# Install Microsoft.WinGet.Client module
+Write-Status "Installing Microsoft.WinGet.Client module..."
+try {
+    if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
+        Install-Module -Name Microsoft.WinGet.Client -Force -AllowClobber -Scope CurrentUser -Repository PSGallery
+        Write-Status "Microsoft.WinGet.Client module installed" -Type Success
+    } else {
+        Write-Status "Microsoft.WinGet.Client module already installed" -Type Success
+    }
+    Import-Module -Name Microsoft.WinGet.Client -Force
+    Write-Status "Microsoft.WinGet.Client module imported" -Type Success
+} catch {
+    Write-Status "Failed to install/import Microsoft.WinGet.Client: $_" -Type Warning
+    Write-Status "Falling back to winget CLI" -Type Info
+}
+
 # Install Sysinternals PsTools
 Write-Status "Installing Sysinternals PsTools..."
 try {
-    # Use a timeout to prevent hanging
-    $job = Start-Job -ScriptBlock {
-        $null = winget list --id Microsoft.Sysinternals.PsTools --exact 2>&1
-        return $LASTEXITCODE
-    }
-
-    $completed = Wait-Job $job -Timeout 10
-    if ($completed) {
-        $exitCode = Receive-Job $job
-        Remove-Job $job -Force
-
-        if ($exitCode -ne 0) {
-            Write-Status "Installing PsTools via WinGet..."
-            winget install -e --id Microsoft.Sysinternals.PsTools --accept-package-agreements --accept-source-agreements --source winget --silent --disable-interactivity
-            if ($LASTEXITCODE -eq 0) {
-                Write-Status "PsTools installed" -Type Success
-            } else {
-                Write-Status "PsTools installation failed with exit code $LASTEXITCODE" -Type Warning
-            }
+    # Try using the PowerShell module first
+    if (Get-Module -Name Microsoft.WinGet.Client) {
+        $installed = Get-WinGetPackage -Id Microsoft.Sysinternals.PsTools -ErrorAction SilentlyContinue
+        if (-not $installed) {
+            Write-Status "Installing PsTools via WinGet PowerShell module..."
+            Install-WinGetPackage -Id Microsoft.Sysinternals.PsTools -Mode Silent -Force
+            Write-Status "PsTools installed" -Type Success
         } else {
             Write-Status "PsTools already installed" -Type Success
         }
     } else {
-        Remove-Job $job -Force
-        Write-Status "PsTools check timed out, skipping installation" -Type Warning
+        # Fallback to CLI
+        Write-Status "Installing PsTools via WinGet CLI..."
+        winget install -e --id Microsoft.Sysinternals.PsTools --accept-package-agreements --accept-source-agreements --source winget --silent --disable-interactivity
+        if ($LASTEXITCODE -eq 0) {
+            Write-Status "PsTools installed" -Type Success
+        } else {
+            Write-Status "PsTools installation failed with exit code $LASTEXITCODE" -Type Warning
+        }
     }
 } catch {
     Write-Status "Failed to install PsTools: $_" -Type Warning
