@@ -4,3 +4,7 @@
 oldprofile.ps1
 CLAUDE.md
 ENTERPRISE_REVIEW.md
+
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md

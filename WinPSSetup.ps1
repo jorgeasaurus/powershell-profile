@@ -166,16 +166,31 @@ try {
 # Install Sysinternals PsTools
 Write-Status "Installing Sysinternals PsTools..."
 try {
-    $psToolsCheck = winget list --id Microsoft.Sysinternals.PsTools --exact 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        winget install -e --id Microsoft.Sysinternals.PsTools --accept-package-agreements --accept-source-agreements --source winget --silent
-        if ($LASTEXITCODE -eq 0) {
-            Write-Status "PsTools installed" -Type Success
+    # Use a timeout to prevent hanging
+    $job = Start-Job -ScriptBlock {
+        $null = winget list --id Microsoft.Sysinternals.PsTools --exact 2>&1
+        return $LASTEXITCODE
+    }
+
+    $completed = Wait-Job $job -Timeout 10
+    if ($completed) {
+        $exitCode = Receive-Job $job
+        Remove-Job $job -Force
+
+        if ($exitCode -ne 0) {
+            Write-Status "Installing PsTools via WinGet..."
+            winget install -e --id Microsoft.Sysinternals.PsTools --accept-package-agreements --accept-source-agreements --source winget --silent --disable-interactivity
+            if ($LASTEXITCODE -eq 0) {
+                Write-Status "PsTools installed" -Type Success
+            } else {
+                Write-Status "PsTools installation failed with exit code $LASTEXITCODE" -Type Warning
+            }
         } else {
-            Write-Status "PsTools installation failed with exit code $LASTEXITCODE" -Type Warning
+            Write-Status "PsTools already installed" -Type Success
         }
     } else {
-        Write-Status "PsTools already installed" -Type Success
+        Remove-Job $job -Force
+        Write-Status "PsTools check timed out, skipping installation" -Type Warning
     }
 } catch {
     Write-Status "Failed to install PsTools: $_" -Type Warning
