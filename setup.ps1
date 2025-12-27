@@ -24,7 +24,7 @@ if ($IsWindows) {
 # Function to test internet connectivity (works on all OS)
 function Test-InternetConnection {
     try {
-        $testConnection = Test-Connection -ComputerName www.google.com -Count 1 -ErrorAction Stop
+        $null = Test-Connection -ComputerName www.google.com -Count 1 -ErrorAction Stop
         return $true
     } catch {
         Write-Warning "Internet connection is required but not available. Please check your connection."
@@ -66,6 +66,7 @@ function Install-NerdFonts {
                 Remove-Item -Path $zipFilePath -Force
             } else {
                 Write-Host "Font $FontDisplayName already installed"
+                return
             }
         } elseif ($IsMacOS) {
             # Use Homebrew to install the correct Nerd Font cask for macOS
@@ -131,7 +132,11 @@ if ($IsWindows) {
     try {
         [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Drawing")
         $fontFamilies = (New-Object System.Drawing.Text.InstalledFontCollection).Families.Name
-        if ((Test-Path -Path $PROFILE) -and (winget list --name "OhMyPosh" -e) -and ($fontFamilies -contains "CaskaydiaCove NF")) {
+
+        # Check Oh My Posh using Get-Command instead of winget list to avoid hanging
+        $ohMyPoshInstalled = Get-Command oh-my-posh -ErrorAction SilentlyContinue
+
+        if ((Test-Path -Path $PROFILE) -and $ohMyPoshInstalled -and ($fontFamilies -contains "CaskaydiaCove NF")) {
             Write-Host "Setup completed successfully. Please restart your PowerShell session to apply changes."
         } else {
             Write-Warning "Setup completed with errors. Please check the error messages above."
