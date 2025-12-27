@@ -152,21 +152,23 @@ if ($IsWindows) {
     }
 }
 
-# Chocolatey Installation (Windows only)
+# Chocolatey Installation (Windows only) - Using WinGet instead
 if ($IsWindows) {
     try {
         # Check if Chocolatey is already installed
         if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-            Write-Host "Installing Chocolatey..."
-            Set-ExecutionPolicy Bypass -Scope Process -Force
-            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+            Write-Host "Installing Chocolatey via WinGet..."
 
-            $installScript = (New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')
-            if ([string]::IsNullOrWhiteSpace($installScript)) {
-                Write-Warning "Failed to download Chocolatey install script. Skipping Chocolatey installation."
+            # Try installing via WinGet first (more reliable)
+            $null = winget install -e --id Chocolatey.Chocolatey --accept-package-agreements --accept-source-agreements --source winget --silent 2>&1
+
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "Chocolatey installed successfully via WinGet."
+                # Refresh PATH
+                $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User')
             } else {
-                Invoke-Expression $installScript
-                Write-Host "Chocolatey installed successfully."
+                Write-Warning "Failed to install Chocolatey via WinGet."
+                Write-Host "You can install Chocolatey manually later from: https://chocolatey.org/install"
             }
         } else {
             Write-Host "Chocolatey is already installed."
