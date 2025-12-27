@@ -155,11 +155,25 @@ if ($IsWindows) {
 # Chocolatey Installation (Windows only)
 if ($IsWindows) {
     try {
-        Set-ExecutionPolicy Bypass -Scope Process -Force
-        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-        Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        # Check if Chocolatey is already installed
+        if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+            Write-Host "Installing Chocolatey..."
+            Set-ExecutionPolicy Bypass -Scope Process -Force
+            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+
+            $installScript = (New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')
+            if ([string]::IsNullOrWhiteSpace($installScript)) {
+                Write-Warning "Failed to download Chocolatey install script. Skipping Chocolatey installation."
+            } else {
+                Invoke-Expression $installScript
+                Write-Host "Chocolatey installed successfully."
+            }
+        } else {
+            Write-Host "Chocolatey is already installed."
+        }
     } catch {
-        Write-Error "Failed to install Chocolatey. Error: $_"
+        Write-Warning "Failed to install Chocolatey: $_"
+        Write-Host "You can install Chocolatey manually later from: https://chocolatey.org/install"
     }
 } else {
     Write-Host "Skipping Chocolatey installation on non-Windows platform."
