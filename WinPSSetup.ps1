@@ -13,8 +13,8 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 # Bootstrap to PowerShell Core
 if ($PSVersionTable.PSEdition -ne 'Core') {
     if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) {
-        #winget install -e --id Microsoft.PowerShell --accept-package-agreements --accept-source-agreements --source winget
-        iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI"
+        winget install -e --id Microsoft.PowerShell --accept-package-agreements --accept-source-agreements --source winget
+        #iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI"
         $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User')
     }
     
@@ -25,7 +25,7 @@ if ($PSVersionTable.PSEdition -ne 'Core') {
 Set-ExecutionPolicy Bypass -Force
 Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
 
-Install-Module PSPreworkout -Force  -AllowClobber
+Install-Module PSPreworkout -Force -AllowClobber
 Import-Module PSPreworkout -Force
 
 Install-WinGet
