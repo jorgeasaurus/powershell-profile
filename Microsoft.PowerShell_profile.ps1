@@ -45,7 +45,7 @@ if (Test-Path ~/Library/CloudStorage/OneDrive-Personal) {
 }
 
 # Oh My Posh theme configuration
-$OhMyPoshTheme = "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_rainbow.omp.json"
+$OhMyPoshTheme = "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/quick-term.omp.json"
 
 # Extra: Price tracking configuration
 $UserStockSymbol = "AAPL"  # Change this to your preferred stock symbol (e.g., "TSLA", "MSFT", "GOOGL")
@@ -97,10 +97,6 @@ if (-not (Get-Module -ListAvailable -Name pspreworkout)) {
 
 Import-Module -Name Terminal-Icons
 Import-Module -Name PSpreworkout
-$ChocolateyProfile = "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
-if (Test-Path($ChocolateyProfile)) {
-    Import-Module "$ChocolateyProfile"
-}
 
 # Windows-specific functions
 if ($IsWindows) {
@@ -836,7 +832,7 @@ function Get-Theme {
     }
 
     if ($OhMyPoshCommand -and (Test-Path $OhMyPoshCommand -ErrorAction SilentlyContinue)) {
-        & $OhMyPoshCommand --init --config $OhMyPoshTheme | Invoke-Expression
+        & $OhMyPoshCommand init pwsh --config $OhMyPoshTheme | Invoke-Expression
     } else {
         Write-Warning "Oh My Posh not found. Skipping theme initialization."
     }

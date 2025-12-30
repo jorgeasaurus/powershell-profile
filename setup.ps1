@@ -83,6 +83,24 @@ if (-not (Test-InternetConnection)) {
     break
 }
 
+# Install Microsoft.WinGet.Client module (Windows only)
+if ($IsWindows) {
+    Write-Host "Installing Microsoft.WinGet.Client module..."
+    try {
+        if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
+            Install-Module -Name Microsoft.WinGet.Client -Force -AllowClobber -Scope CurrentUser -Repository PSGallery
+            Write-Host "Microsoft.WinGet.Client module installed"
+        } else {
+            Write-Host "Microsoft.WinGet.Client module already installed"
+        }
+        Import-Module -Name Microsoft.WinGet.Client -Force
+        Write-Host "Microsoft.WinGet.Client module imported"
+    } catch {
+        Write-Warning "Failed to install/import Microsoft.WinGet.Client: $_"
+        Write-Host "Falling back to winget CLI for package installations"
+    }
+}
+
 # Profile creation or update (platform independent)
 if (!(Test-Path -Path $PROFILE -PathType Leaf)) {
     try {
@@ -111,9 +129,31 @@ if (!(Test-Path -Path $PROFILE -PathType Leaf)) {
 # Oh My Posh Installation
 if ($IsWindows) {
     try {
-        winget install -e --accept-source-agreements --accept-package-agreements JanDeDobbeleer.OhMyPosh --source winget
+        # Check if already installed
+        $ohMyPoshInstalled = Get-Command oh-my-posh -ErrorAction SilentlyContinue
+
+        if (-not $ohMyPoshInstalled) {
+            Write-Host "Installing Oh My Posh..."
+
+            # Try using PowerShell module first
+            if (Get-Module -Name Microsoft.WinGet.Client) {
+                $installed = Get-WinGetPackage -Id JanDeDobbeleer.OhMyPosh -ErrorAction SilentlyContinue
+                if (-not $installed) {
+                    Install-WinGetPackage -Id JanDeDobbeleer.OhMyPosh -Mode Silent -Force
+                    Write-Host "Oh My Posh installed via WinGet PowerShell module"
+                } else {
+                    Write-Host "Oh My Posh already installed"
+                }
+            } else {
+                # Fallback to CLI
+                winget install -e --accept-source-agreements --accept-package-agreements JanDeDobbeleer.OhMyPosh --source winget
+                Write-Host "Oh My Posh installed via WinGet CLI"
+            }
+        } else {
+            Write-Host "Oh My Posh already installed"
+        }
     } catch {
-        Write-Error "Failed to install Oh My Posh. Error: $_"
+        Write-Warning "Failed to install Oh My Posh: $_"
     }
 } elseif ($IsMacOS) {
     try {
@@ -150,35 +190,6 @@ if ($IsWindows) {
     } else {
         Write-Warning "Setup completed with errors. Please check the error messages above."
     }
-}
-
-# Chocolatey Installation (Windows only) - Using WinGet instead
-if ($IsWindows) {
-    try {
-        # Check if Chocolatey is already installed
-        if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-            Write-Host "Installing Chocolatey via WinGet..."
-
-            # Try installing via WinGet first (more reliable)
-            $null = winget install -e --id Chocolatey.Chocolatey --accept-package-agreements --accept-source-agreements --source winget --silent 2>&1
-
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "Chocolatey installed successfully via WinGet."
-                # Refresh PATH
-                $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User')
-            } else {
-                Write-Warning "Failed to install Chocolatey via WinGet."
-                Write-Host "You can install Chocolatey manually later from: https://chocolatey.org/install"
-            }
-        } else {
-            Write-Host "Chocolatey is already installed."
-        }
-    } catch {
-        Write-Warning "Failed to install Chocolatey: $_"
-        Write-Host "You can install Chocolatey manually later from: https://chocolatey.org/install"
-    }
-} else {
-    Write-Host "Skipping Chocolatey installation on non-Windows platform."
 }
 
 # Terminal Icons Installation (should work on both platforms)
