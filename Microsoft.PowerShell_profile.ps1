@@ -98,6 +98,14 @@ if (-not (Get-Module -ListAvailable -Name pspreworkout)) {
 Import-Module -Name Terminal-Icons
 Import-Module -Name PSpreworkout
 
+# Conditionally import PwshSpectreConsole for enhanced visuals
+try {
+    Import-Module -Name PwshSpectreConsole -ErrorAction Stop
+    $global:SpectreAvailable = $true
+} catch {
+    $global:SpectreAvailable = $false
+}
+
 # Windows-specific functions
 if ($IsWindows) {
     function Invoke-WindowsPowerShellUpgrade {
@@ -2106,7 +2114,8 @@ function Show-SystemNeofetch {
     [CmdletBinding()]
     param(
         [switch]$NoColor,
-        [string]$CustomAscii
+        [string]$CustomAscii,
+        [string]$ProfileImage = "/Users/jorgeasaurus/Library/CloudStorage/OneDrive-Personal/profilepic.jpeg"
     )
 
     # ANSI color codes
@@ -2128,7 +2137,13 @@ function Show-SystemNeofetch {
     # Get system information
     $sysInfo = Get-SystemInfo
 
-    # Get ASCII art
+    # Determine whether to use Spectre image or ASCII art
+    $useSpectreImage = $false
+    if ($global:SpectreAvailable -and (Test-Path $ProfileImage) -and -not $NoColor) {
+        $useSpectreImage = $true
+    }
+
+    # Get ASCII art (fallback)
     $asciiLines = if ($CustomAscii -and (Test-Path $CustomAscii)) {
         Get-Content $CustomAscii
     } else {
@@ -2138,8 +2153,12 @@ function Show-SystemNeofetch {
     # Build info lines
     $infoLines = @()
 
+    # Adjust width based on whether we're using image or ASCII art
+    # With image on left (35 cols), we can use up to ~90 cols for info (terminal width ~125)
+    $infoWidth = if ($useSpectreImage) { 90 } else { 80 }
+
     # Header with user@host
-    $separator = "-" * 80
+    $separator = "-" * $infoWidth
     $userHost = "$($sysInfo.User)@$($sysInfo.Host)"
     $infoLines += "$(Get-ColoredText $userHost 'Cyan')"
     $infoLines += Get-ColoredText $separator 'Gray'
@@ -2170,7 +2189,7 @@ function Show-SystemNeofetch {
     foreach ($key in $systemInfo.Keys) {
         $value = $systemInfo[$key]
         if ($value) {
-            $dots = Get-DotJustifiedLine -Key $key -Value $value
+            $dots = Get-DotJustifiedLine -Key $key -Value $value -TargetWidth $infoWidth
             $coloredKey = Get-ColoredText $key 'Orange'
             $coloredDots = Get-ColoredText " $dots " 'Gray'
             $coloredValue = Get-ColoredText $value 'Blue'
@@ -2180,7 +2199,8 @@ function Show-SystemNeofetch {
 
     # Hardware Information
     $infoLines += ""
-    $infoLines += Get-ColoredText "- Hardware $('-' * 69)" 'White'
+    $hardwareSepDashes = '-' * ($infoWidth - 11)  # 11 = "- Hardware " length
+    $infoLines += Get-ColoredText "- Hardware $hardwareSepDashes" 'White'
 
     $hardwareInfo = [ordered]@{
         "CPU"    = $sysInfo.CPU
@@ -2203,7 +2223,7 @@ function Show-SystemNeofetch {
     foreach ($key in $hardwareInfo.Keys) {
         $value = $hardwareInfo[$key]
         if ($value) {
-            $dots = Get-DotJustifiedLine -Key $key -Value $value
+            $dots = Get-DotJustifiedLine -Key $key -Value $value -TargetWidth $infoWidth
             $coloredKey = Get-ColoredText $key 'Orange'
             $coloredDots = Get-ColoredText " $dots " 'Gray'
             $coloredValue = Get-ColoredText $value 'Blue'
@@ -2213,7 +2233,8 @@ function Show-SystemNeofetch {
 
     # Extra: Price Information
     $infoLines += ""
-    $infoLines += Get-ColoredText "- Extra $('-' * 72)" 'White'
+    $extraSepDashes = '-' * ($infoWidth - 8)  # 8 = "- Extra " length
+    $infoLines += Get-ColoredText "- Extra $extraSepDashes" 'White'
 
     # Fetch prices with error handling
     try {
@@ -2225,7 +2246,7 @@ function Show-SystemNeofetch {
             $changeColor = if ($crypto.Change24h -ge 0) { 'Green' } else { 'Red' }
             $changeSign = if ($crypto.Change24h -ge 0) { '+' } else { '' }
             $value = "`${0:N2} {1} {2}{3:N2}%" -f $crypto.Price, $changeSymbol, $changeSign, $crypto.Change24h
-            $dots = Get-DotJustifiedLine -Key $crypto.Symbol -Value $value
+            $dots = Get-DotJustifiedLine -Key $crypto.Symbol -Value $value -TargetWidth $infoWidth
             $coloredKey = Get-ColoredText $crypto.Symbol 'Orange'
             $coloredDots = Get-ColoredText " $dots " 'Gray'
             $coloredValue = Get-ColoredText $value $changeColor
@@ -2237,7 +2258,7 @@ function Show-SystemNeofetch {
             $changeColor = if ($stock.Change -ge 0) { 'Green' } else { 'Red' }
             $changeSign = if ($stock.Change -ge 0) { '+' } else { '' }
             $value = "`${0:N2} {1} {2}{3:N2}%" -f $stock.Price, $changeSymbol, $changeSign, $stock.ChangePercent
-            $dots = Get-DotJustifiedLine -Key $stock.Symbol -Value $value
+            $dots = Get-DotJustifiedLine -Key $stock.Symbol -Value $value -TargetWidth $infoWidth
             $coloredKey = Get-ColoredText $stock.Symbol 'Orange'
             $coloredDots = Get-ColoredText " $dots " 'Gray'
             $coloredValue = Get-ColoredText $value $changeColor
@@ -2256,31 +2277,85 @@ function Show-SystemNeofetch {
     $palette += "`e[0m"
     $infoLines += $palette
 
-    # Combine ASCII art with info
-    $maxAsciiWidth = ($asciiLines | Measure-Object -Property Length -Maximum).Maximum
-    $padding = 4 # Space between ASCII and info
-
-    $totalLines = [Math]::Max($asciiLines.Count, $infoLines.Count)
-
+    # Display image or ASCII art with info
     Write-Host ""
-    for ($i = 0; $i -lt $totalLines; $i++) {
-        $asciiLine = if ($i -lt $asciiLines.Count) { $asciiLines[$i] } else { "" }
-        $infoLine = if ($i -lt $infoLines.Count) { $infoLines[$i] } else { "" }
 
-        # Colorize ASCII art (using cyan for the art)
-        $coloredAscii = if ($NoColor) {
-            $asciiLine.PadRight($maxAsciiWidth)
-        } else {
-            $asciiLine = $asciiLine -replace 'M', "$(Get-ColoredText 'M' 'Cyan')"
-            $asciiLine = $asciiLine -replace '\.', "$(Get-ColoredText '.' 'Blue')"
-            # Pad to align
-            $rawLen = ($asciiLines[$i] ?? "").Length
-            $padNeeded = $maxAsciiWidth - $rawLen
-            $asciiLine + (" " * [Math]::Max(0, $padNeeded))
+    if ($useSpectreImage) {
+        # Use Spectre.Console image rendering
+        try {
+            # Check if we're in an interactive console that supports cursor positioning
+            if ([Console]::IsOutputRedirected -or [Console]::WindowHeight -eq 0) {
+                throw "Console does not support cursor positioning"
+            }
+
+            # Display image on the left, then move cursor and display info
+            # Save current cursor position
+            $startLine = [Console]::CursorTop
+
+            # Render the Spectre image (this writes directly to console)
+            Get-SpectreImage -ImagePath $ProfileImage -MaxWidth 25
+
+            # Calculate how many lines the image took
+            $endLine = [Console]::CursorTop
+            $imageHeight = $endLine - $startLine
+
+            # Now position cursor to display info on the right side
+            # The image is rendered at MaxWidth 25, but with padding/spacing
+            # we need to start the info further right. Column 35 should work.
+            $infoStartColumn = 52
+
+            # Go back to start and write info lines
+            $linesToWrite = [Math]::Max($imageHeight, $infoLines.Count)
+
+            for ($i = 0; $i -lt $infoLines.Count; $i++) {
+                # Position cursor at the right column for this line
+                $targetLine = $startLine + $i
+
+                # Make sure we don't go past the buffer
+                if ($targetLine -lt [Console]::BufferHeight) {
+                    [Console]::SetCursorPosition($infoStartColumn, $targetLine)
+                    # Write without newline to prevent cursor moving
+                    [Console]::Write($infoLines[$i])
+                }
+            }
+
+            # Move cursor to the end
+            [Console]::SetCursorPosition(0, $startLine + $linesToWrite)
+            Write-Host ""  # Add final newline
+
+        } catch {
+            # Fall back to ASCII art if Spectre image fails
+            $useSpectreImage = $false
         }
-
-        Write-Host "$coloredAscii$(' ' * $padding)$infoLine"
     }
+
+    if (-not $useSpectreImage) {
+        # Use traditional ASCII art
+        $maxAsciiWidth = ($asciiLines | Measure-Object -Property Length -Maximum).Maximum
+        $padding = 4 # Space between ASCII and info
+
+        $totalLines = [Math]::Max($asciiLines.Count, $infoLines.Count)
+
+        for ($i = 0; $i -lt $totalLines; $i++) {
+            $asciiLine = if ($i -lt $asciiLines.Count) { $asciiLines[$i] } else { "" }
+            $infoLine = if ($i -lt $infoLines.Count) { $infoLines[$i] } else { "" }
+
+            # Colorize ASCII art (using cyan for the art)
+            $coloredAscii = if ($NoColor) {
+                $asciiLine.PadRight($maxAsciiWidth)
+            } else {
+                $asciiLine = $asciiLine -replace 'M', "$(Get-ColoredText 'M' 'Cyan')"
+                $asciiLine = $asciiLine -replace '\.', "$(Get-ColoredText '.' 'Blue')"
+                # Pad to align
+                $rawLen = ($asciiLines[$i] ?? "").Length
+                $padNeeded = $maxAsciiWidth - $rawLen
+                $asciiLine + (" " * [Math]::Max(0, $padNeeded))
+            }
+
+            Write-Host "$coloredAscii$(' ' * $padding)$infoLine"
+        }
+    }
+
     Write-Host ""
 }
 
