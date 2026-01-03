@@ -100,8 +100,15 @@ Import-Module -Name PSpreworkout
 
 # Conditionally import PwshSpectreConsole for enhanced visuals
 try {
-    Import-Module -Name PwshSpectreConsole -ErrorAction Stop
-    $global:SpectreAvailable = $true
+    # Check for PS7+ and import the module
+    if ($PSVersionTable.PSVersion.Major -ge 7) {
+        $OutputEncoding = [console]::InputEncoding = [console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+        if (-not (Get-Module -ListAvailable -Name PwshSpectreConsole)) {
+            Install-Module -Name PwshSpectreConsole -Scope CurrentUser -Force -SkipPublisherCheck
+        }
+        Import-Module -Name PwshSpectreConsole -ErrorAction Stop
+        $global:SpectreAvailable = $true
+    }
 } catch {
     $global:SpectreAvailable = $false
 }
@@ -2399,16 +2406,16 @@ function Get-CryptoPrice {
             try {
                 # Map common symbols to CoinGecko IDs
                 $coinMap = @{
-                    'BTC' = 'bitcoin'
-                    'ETH' = 'ethereum'
-                    'SOL' = 'solana'
-                    'ADA' = 'cardano'
-                    'DOT' = 'polkadot'
+                    'BTC'   = 'bitcoin'
+                    'ETH'   = 'ethereum'
+                    'SOL'   = 'solana'
+                    'ADA'   = 'cardano'
+                    'DOT'   = 'polkadot'
                     'MATIC' = 'matic-network'
-                    'AVAX' = 'avalanche-2'
-                    'LINK' = 'chainlink'
-                    'UNI' = 'uniswap'
-                    'DOGE' = 'dogecoin'
+                    'AVAX'  = 'avalanche-2'
+                    'LINK'  = 'chainlink'
+                    'UNI'   = 'uniswap'
+                    'DOGE'  = 'dogecoin'
                 }
 
                 $coinId = if ($coinMap.ContainsKey($coin.ToUpper())) {
@@ -2422,8 +2429,8 @@ function Get-CryptoPrice {
 
                 if ($response.$coinId) {
                     $results += [PSCustomObject]@{
-                        Symbol = $coin.ToUpper()
-                        Price = $response.$coinId.usd
+                        Symbol    = $coin.ToUpper()
+                        Price     = $response.$coinId.usd
                         Change24h = $response.$coinId.usd_24h_change
                         MarketCap = $response.$coinId.usd_market_cap
                     }
@@ -2496,11 +2503,11 @@ function Get-StockPrice {
                     }
 
                     $results += [PSCustomObject]@{
-                        Symbol = $stock.ToUpper()
-                        Price = $currentPrice
-                        Change = $change
+                        Symbol        = $stock.ToUpper()
+                        Price         = $currentPrice
+                        Change        = $change
                         ChangePercent = $changePercent
-                        MarketState = $quote.marketState
+                        MarketState   = $quote.marketState
                     }
                 }
             } catch {
