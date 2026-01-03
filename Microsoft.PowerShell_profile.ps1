@@ -1580,8 +1580,20 @@ function Get-SystemInfo {
         [switch]$NoCache
     )
 
-    # Cache file location
-    $cacheFile = "$env:TEMP\PSProfile_SystemInfo_Cache.json"
+    # Cache file location - use platform-appropriate temp directory
+    $cacheFile = if ($IsWindows) {
+        "$env:TEMP\PSProfile_SystemInfo_Cache.json"
+    } else {
+        "$HOME/.cache/powershell/PSProfile_SystemInfo_Cache.json"
+    }
+
+    # Ensure cache directory exists on non-Windows platforms
+    if (-not $IsWindows) {
+        $cacheDir = Split-Path $cacheFile -Parent
+        if (-not (Test-Path $cacheDir)) {
+            New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+        }
+    }
 
     # Try to load from cache if not forced to skip
     if (-not $NoCache -and (Test-Path $cacheFile)) {
