@@ -206,6 +206,20 @@ try {
     Write-Status "Failed to install PsTools: $_" -Type Warning
 }
 
+try {
+    # Check for PS7+ and import the module
+    if ($PSVersionTable.PSVersion.Major -ge 7) {
+        $OutputEncoding = [console]::InputEncoding = [console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+        if (-not (Get-Module -ListAvailable -Name PwshSpectreConsole)) {
+            Install-Module -Name PwshSpectreConsole -Scope CurrentUser -Force -SkipPublisherCheck
+        }
+        Import-Module -Name PwshSpectreConsole -ErrorAction Stop
+        $global:SpectreAvailable = $true
+    }
+} catch {
+    $global:SpectreAvailable = $false
+}
+
 # Run main setup script
 Write-Status "Running main setup script..."
 try {
@@ -247,36 +261,46 @@ try {
         Copy-Item $wtSettingsPath $backupPath -Force
         Write-Status "Settings backed up to: $backupPath" -Type Info
 
+        # Read current settings
         $settings = Get-Content $wtSettingsPath -Raw | ConvertFrom-Json
 
-        # Find PowerShell Core profile GUID
-        $pwshProfile = $settings.profiles.list | Where-Object { $_.name -eq 'PowerShell' -and $_.source -eq 'Windows.Terminal.PowershellCore' }
+        # Find PowerShell Core profile by source (GUID-independent)
+        $pwshProfile = $settings.profiles.list | Where-Object {
+            $_.name -eq 'PowerShell' -and $_.source -eq 'Windows.Terminal.PowershellCore'
+        }
+
         if ($pwshProfile) {
             $settings.defaultProfile = $pwshProfile.guid
-            Write-Status "Set PowerShell Core as default profile" -Type Success
+            Write-Status "Set PowerShell Core (GUID: $($pwshProfile.guid)) as default profile" -Type Success
         } else {
             Write-Status "PowerShell Core profile not found in Windows Terminal" -Type Warning
+            Write-Status "Make sure PowerShell 7+ is installed" -Type Info
         }
 
         # Initialize defaults object if needed
         if (-not $settings.profiles.defaults) {
-            $settings.profiles | Add-Member -NotePropertyName 'defaults' -NotePropertyValue @{} -Force
-        }
-        if (-not $settings.profiles.defaults.font) {
-            $settings.profiles.defaults | Add-Member -NotePropertyName 'font' -NotePropertyValue @{} -Force
+            $settings.profiles | Add-Member -NotePropertyName 'defaults' -NotePropertyValue ([PSCustomObject]@{}) -Force
         }
 
-        # Set font and appearance
+        # Initialize font object if needed
+        if (-not $settings.profiles.defaults.font) {
+            $settings.profiles.defaults | Add-Member -NotePropertyName 'font' -NotePropertyValue ([PSCustomObject]@{}) -Force
+        }
+
+        # Configure appearance settings
         $settings.profiles.defaults.font | Add-Member -NotePropertyName 'face' -NotePropertyValue 'CaskaydiaCove Nerd Font Mono' -Force
         $settings.profiles.defaults | Add-Member -NotePropertyName 'opacity' -NotePropertyValue 87 -Force
-        $settings.profiles.defaults | Add-Member -NotePropertyName 'useAcrylic' -NotePropertyValue $false -Force
+        $settings.profiles.defaults | Add-Member -NotePropertyName 'useAcrylic' -NotePropertyValue $true -Force
+        $settings | Add-Member -NotePropertyName 'initialCols' -NotePropertyValue 150 -Force
 
         # Save settings
         $settings | ConvertTo-Json -Depth 100 | Set-Content $wtSettingsPath -Encoding UTF8
+
         Write-Status "Windows Terminal configured successfully" -Type Success
+        Write-Status "  - Default Profile: PowerShell Core" -Type Info
         Write-Status "  - Font: CaskaydiaCove Nerd Font Mono" -Type Info
         Write-Status "  - Opacity: 87%" -Type Info
-        Write-Status "  - Acrylic: Disabled" -Type Info
+        Write-Status "  - Acrylic: Enabled" -Type Info
     } else {
         Write-Status "Windows Terminal settings not found. Install Windows Terminal from the Microsoft Store." -Type Warning
         Write-Status "You can install it with: winget install Microsoft.WindowsTerminal" -Type Info

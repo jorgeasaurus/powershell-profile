@@ -76,6 +76,18 @@ if (-not (Test-Path $timeFilePath)) {
     $currentTime | Out-File -FilePath $timeFilePath -Force
 }
 
+# Define local profile image path and download from GitHub if needed
+$localProfileImage = "$env:USERPROFILE\Documents\PowerShell\profilepic.jpeg"
+$profileImageUrl = "https://github.com/jorgeasaurus/powershell-profile/raw/main/profilepic.jpeg"
+
+if (-not (Test-Path $localProfileImage)) {
+    try {
+        Invoke-RestMethod -Uri $profileImageUrl -OutFile $localProfileImage -ErrorAction Stop
+    } catch {
+        # Silently ignore if download fails
+    }
+}
+
 # Initial GitHub.com connectivity check with 1 second timeout
 # Initial GitHub.com connectivity check (compatible with PowerShell 5.x and Core)
 try {
@@ -2120,7 +2132,7 @@ function Show-SystemNeofetch {
     param(
         [switch]$NoColor,
         [string]$CustomAscii,
-        [string]$ProfileImage = "$OneDrive/10-19_Personal_Projects/14_Scripts_Utilities/profilepic.jpeg"
+        [string]$ProfileImage = "$env:USERPROFILE\Documents\PowerShell\profilepic.jpeg"
     )
 
     Clear-Host
