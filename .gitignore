@@ -8,3 +8,6 @@ ENTERPRISE_REVIEW.md
 
 #Ignore vscode AI rules
 .github\instructions\codacy.instructions.md
+CODE_REVIEW_Profile.md
+Microsoft.PowerShell_profile.ps1.*
+setup.ps1.*

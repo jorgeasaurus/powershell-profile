@@ -3,6 +3,9 @@
 
 $debug = $false
 $isVSCode = ($env:TERM_PROGRAM -eq 'vscode')
+if (Test-Path "./.claude" -or Test-Path "./.git"){
+    return
+}
 # Define the update interval in days, set to -1 to always check
 $updateInterval = 7
 
@@ -86,16 +89,6 @@ if (-not (Test-Path $localProfileImage)) {
     } catch {
         # Silently ignore if download fails
     }
-}
-
-# Initial GitHub.com connectivity check with 1 second timeout
-# Initial GitHub.com connectivity check (compatible with PowerShell 5.x and Core)
-try {
-    $ping = [System.Net.NetworkInformation.Ping]::new()
-    $reply = $ping.Send('github.com', 1000)
-    $global:canConnectToGitHub = $reply.Status -eq 'Success'
-} catch {
-    $global:canConnectToGitHub = $false
 }
 
 # Import Modules and External Profiles
@@ -300,10 +293,10 @@ if ($IsWindows) {
                 $parentPath = $item.DirectoryName
             }
 
-            $shell = New-Object -ComObject 'Shell.Application'
-            $shellItem = $shell.NameSpace($parentPath).ParseName($item.Name)
+        $shell = New-Object -ComObject 'Shell.Application'
+        $shellItem = $shell.NameSpace($parentPath).ParseName($item.Name)
 
-            if ($item) {
+        if ($shellItem) {
                 $shellItem.InvokeVerb('delete')
                 Write-Host "Item '$fullPath' has been moved to the Recycle Bin."
             } else {
@@ -540,14 +533,15 @@ function Save-UpdateTimestamp {
     (Get-Date -Format 'yyyy-MM-dd') | Out-File -FilePath $TimeFilePath -Force
 }
 
-# Check for profile updates
+# Check for profile and PowerShell updates (single interval gate)
 if (-not $debug -and (Test-UpdateDue -TimeFilePath $timeFilePath -IntervalDays $updateInterval)) {
     Update-Profile
+    Update-PowerShell
     Save-UpdateTimestamp -TimeFilePath $timeFilePath
 } elseif (-not $debug) {
-    Write-Warning "Profile update skipped. Last update check was within the last $updateInterval day(s)."
+    Write-Warning "Profile/PowerShell update skipped. Last update check was within the last $updateInterval day(s)."
 } else {
-    Write-Warning "Skipping profile update check in debug mode"
+    Write-Warning "Skipping profile/PowerShell update check in debug mode"
 }
 
 function Update-PowerShell {
