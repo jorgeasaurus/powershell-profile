@@ -2482,6 +2482,5 @@ function Show-PriceSnapshot {
 
 Clear-Host
 if (-not $isVSCode) {
-    $OutputEncoding = [console]::InputEncoding = [console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
     Show-SystemNeofetch
 }
