@@ -2123,6 +2123,8 @@ function Show-SystemNeofetch {
         [string]$ProfileImage = "$OneDrive/10-19_Personal_Projects/14_Scripts_Utilities/profilepic.jpeg"
     )
 
+    Clear-Host
+
     # ANSI color codes
     $script:Colors = @{
         Reset  = "`e[0m"
@@ -2298,7 +2300,7 @@ function Show-SystemNeofetch {
             $startLine = [Console]::CursorTop
 
             # Render the Spectre image (this writes directly to console)
-            Get-SpectreImage -ImagePath $ProfileImage -MaxWidth 25
+            Get-SpectreImage -ImagePath $ProfileImage -MaxWidth 50
 
             # Calculate how many lines the image took
             $endLine = [Console]::CursorTop
