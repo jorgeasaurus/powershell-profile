@@ -223,6 +223,13 @@ Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host "  PowerShell Environment Setup" -ForegroundColor Cyan
 Write-Host "========================================`n" -ForegroundColor Cyan
 
+# Match WinPSSetup: ensure process-level execution policy is relaxed for installs
+try {
+    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+} catch {
+    Write-Verbose "Execution policy change failed: $($_.Exception.Message)"
+}
+
 # ============================================================================
 # Windows Prerequisites
 # ============================================================================

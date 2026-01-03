@@ -3,7 +3,7 @@
 
 $debug = $false
 $isVSCode = ($env:TERM_PROGRAM -eq 'vscode')
-if (Test-Path "./.claude" -or Test-Path "./.git"){
+if ($(Get-Location) -like "*code*" -and ((Test-Path "./.claude") -or (Test-Path "./.git"))){
     return
 }
 # Define the update interval in days, set to -1 to always check
@@ -91,31 +91,90 @@ if (-not (Test-Path $localProfileImage)) {
     }
 }
 
-# Import Modules and External Profiles
-# Ensure Terminal-Icons module is installed before importing
-if (-not (Get-Module -ListAvailable -Name Terminal-Icons)) {
-    Install-Module -Name Terminal-Icons -Scope CurrentUser -Force -SkipPublisherCheck
-}
-if (-not (Get-Module -ListAvailable -Name pspreworkout)) {
-    Install-Module -Name pspreworkout -Scope CurrentUser -Force -SkipPublisherCheck
-}
+# Consolidated module initialization function
+function Initialize-ProfileModules {
+    <#
+    .SYNOPSIS
+        Initializes required PowerShell modules for the profile.
+    .DESCRIPTION
+        Checks for and optionally installs required modules: Terminal-Icons, PSpreworkout, and PwshSpectreConsole.
+        By default, only imports modules if they're already installed. Use -Install to install missing modules.
+    .PARAMETER Install
+        If specified, installs any missing modules from PSGallery.
+    .EXAMPLE
+        Initialize-ProfileModules
+        Imports modules if available, warns if missing.
+    .EXAMPLE
+        Initialize-ProfileModules -Install
+        Installs missing modules and then imports them.
+    #>
+    [CmdletBinding()]
+    param(
+        [switch]$Install
+    )
 
-Import-Module -Name Terminal-Icons
-Import-Module -Name PSpreworkout
+    $requiredModules = @(
+        @{ Name = 'Terminal-Icons'; Required = $true; MinVersion = $null }
+        @{ Name = 'PSpreworkout'; Required = $true; MinVersion = $null }
+        @{ Name = 'PwshSpectreConsole'; Required = $false; MinVersion = $null; PS7Only = $true }
+    )
 
-# Conditionally import PwshSpectreConsole for enhanced visuals
-try {
-    # Check for PS7+ and import the module
-    if ($PSVersionTable.PSVersion.Major -ge 7) {
-        if (-not (Get-Module -ListAvailable -Name PwshSpectreConsole)) {
-            Install-Module -Name PwshSpectreConsole -Scope CurrentUser -Force -SkipPublisherCheck
-        }
-        Import-Module -Name PwshSpectreConsole -ErrorAction Stop
-        $global:SpectreAvailable = $true
-    }
-} catch {
+    $missingModules = @()
     $global:SpectreAvailable = $false
+
+    foreach ($module in $requiredModules) {
+        # Skip PS7-only modules if running PS5
+        if ($module.PS7Only -and $PSVersionTable.PSVersion.Major -lt 7) {
+            continue
+        }
+
+        $installed = Get-Module -ListAvailable -Name $module.Name -ErrorAction SilentlyContinue
+
+        if (-not $installed) {
+            if ($Install) {
+                Write-Host "Installing module: $($module.Name)..." -ForegroundColor Cyan
+                try {
+                    Install-Module -Name $module.Name -Scope CurrentUser -Force -SkipPublisherCheck -ErrorAction Stop
+                    Write-Host "  ✓ $($module.Name) installed successfully" -ForegroundColor Green
+                    $installed = $true
+                } catch {
+                    Write-Warning "Failed to install $($module.Name): $_"
+                    if ($module.Required) {
+                        $missingModules += $module.Name
+                    }
+                    continue
+                }
+            } else {
+                if ($module.Required) {
+                    $missingModules += $module.Name
+                }
+                continue
+            }
+        }
+
+        # Import the module
+        try {
+            Import-Module -Name $module.Name -ErrorAction Stop
+            if ($module.Name -eq 'PwshSpectreConsole') {
+                $global:SpectreAvailable = $true
+            }
+        } catch {
+            Write-Warning "Failed to import $($module.Name): $_"
+        }
+    }
+
+    # Warn about missing required modules
+    if ($missingModules.Count -gt 0) {
+        Write-Warning @"
+Missing required modules: $($missingModules -join ', ')
+Run 'Initialize-ProfileModules -Install' to install them, or install manually:
+    Install-Module -Name $($missingModules -join ',') -Scope CurrentUser
+"@
+    }
 }
+
+# Initialize modules (import only, no auto-install)
+Initialize-ProfileModules
 
 # Windows-specific functions
 if ($IsWindows) {
@@ -171,34 +230,6 @@ if ($IsWindows) {
             "-Command", "irm https://christitus.com/win | iex; Read-Host 'Press Enter to close'"
         )
     }
-
-    function winutildev {
-        <#
-        .SYNOPSIS
-            Launches the Chris Titus Tech Windows Utility (dev/pre-release)
-        .DESCRIPTION
-            Downloads and runs the WinUtil dev script in a new elevated PowerShell window
-            for security isolation. The script is NOT executed in the current session.
-        #>
-        [CmdletBinding()]
-        param()
-
-        Write-Warning "This will download and execute a remote PRE-RELEASE script in an elevated window."
-        Write-Warning "Source: https://christitus.com/windev"
-        $confirm = Read-Host "Continue? (y/N)"
-        if ($confirm -ne 'y') {
-            Write-Host "Cancelled." -ForegroundColor Yellow
-            return
-        }
-
-        # Run in isolated elevated process - not in current session
-        Start-Process powershell.exe -Verb RunAs -ArgumentList @(
-            "-NoProfile"
-            "-ExecutionPolicy", "Bypass"
-            "-Command", "irm https://christitus.com/windev | iex; Read-Host 'Press Enter to close'"
-        )
-    }
-
     function admin {
         if ($args.Count -gt 0) {
             $argList = $args -join ' '
@@ -271,49 +302,6 @@ if ($IsWindows) {
         } catch {
             Write-Error "An error occurred while retrieving system uptime."
         }
-    }
-
-    function df {
-        Get-Volume
-    }
-
-    function which($name) {
-        Get-Command $name | Select-Object -ExpandProperty Definition
-    }
-
-    function trash($path) {
-        $fullPath = (Resolve-Path -Path $path).Path
-
-        if (Test-Path $fullPath) {
-            $item = Get-Item $fullPath
-
-            if ($item.PSIsContainer) {
-                $parentPath = $item.Parent.FullName
-            } else {
-                $parentPath = $item.DirectoryName
-            }
-
-        $shell = New-Object -ComObject 'Shell.Application'
-        $shellItem = $shell.NameSpace($parentPath).ParseName($item.Name)
-
-        if ($shellItem) {
-                $shellItem.InvokeVerb('delete')
-                Write-Host "Item '$fullPath' has been moved to the Recycle Bin."
-            } else {
-                Write-Host "Error: Could not find the item '$fullPath' to trash."
-            }
-        } else {
-            Write-Host "Error: Item '$fullPath' does not exist."
-        }
-    }
-
-    function sysinfo {
-        Get-ComputerInfo
-    }
-
-    function flushdns {
-        Clear-DnsClientCache
-        Write-Host "DNS has been flushed"
     }
 
     function sys {
@@ -413,7 +401,6 @@ if ($IsMacOS) {
             return $false
         }
     }
-
     function Clear-MacCache {
         Write-Host "Detected macOS system" -ForegroundColor Yellow
 
@@ -578,16 +565,6 @@ function Update-PowerShell {
     }
 }
 
-# Check for PowerShell updates
-if (-not $debug -and (Test-UpdateDue -TimeFilePath $timeFilePath -IntervalDays $updateInterval)) {
-    Update-PowerShell
-    Save-UpdateTimestamp -TimeFilePath $timeFilePath
-} elseif (-not $debug) {
-    Write-Warning "PowerShell update skipped. Last update check was within the last $updateInterval day(s)."
-} else {
-    Write-Warning "Skipping PowerShell update in debug mode"
-}
-
 function Clear-Cache {
     Write-Host "Clearing cache..." -ForegroundColor Cyan
 
@@ -612,13 +589,6 @@ function Edit-Profile {
 }
 Set-Alias -Name ep -Value Edit-Profile
 
-function touch($file) { "" | Out-File $file -Encoding ASCII }
-function ff($name) {
-    Get-ChildItem -Recurse -Filter "*${name}*" -ErrorAction SilentlyContinue | ForEach-Object {
-        Write-Output "$($_.FullName)"
-    }
-}
-
 # Network Utilities
 function Get-PubIP { (Invoke-WebRequest http://ifconfig.me/ip).Content }
 
@@ -626,96 +596,8 @@ function reload-profile {
     & $profile
 }
 
-function unzip ($file) {
-    Write-Output("Extracting", $file, "to", $pwd)
-    $fullFile = Get-ChildItem -Path $pwd -Filter $file | ForEach-Object { $_.FullName }
-    Expand-Archive -Path $fullFile -DestinationPath $pwd
-}
-function hb {
-    if ($args.Length -eq 0) {
-        Write-Error "No file path specified."
-        return
-    }
-
-    $FilePath = $args[0]
-
-    if (Test-Path $FilePath) {
-        $Content = Get-Content $FilePath -Raw
-    } else {
-        Write-Error "File path does not exist."
-        return
-    }
-
-    $uri = "http://bin.christitus.com/documents"
-    try {
-        $response = Invoke-RestMethod -Uri $uri -Method Post -Body $Content -ErrorAction Stop
-        $hasteKey = $response.key
-        $url = "http://bin.christitus.com/$hasteKey"
-        Set-Clipboard $url
-        Write-Output $url
-    } catch {
-        Write-Error "Failed to upload the document. Error: $_"
-    }
-}
-function grep($regex, $dir) {
-    if ( $dir ) {
-        Get-ChildItem $dir | Select-String $regex
-        return
-    }
-    $input | Select-String $regex
-}
-
-function sed($file, $find, $replace) {
-    (Get-Content $file).replace("$find", $replace) | Set-Content $file
-}
-
-function export($name, $value) {
-    Set-Item -Force -Path "env:$name" -Value $value;
-}
-
-function pkill($name) {
-    Get-Process $name -ErrorAction SilentlyContinue | Stop-Process
-}
-
-function pgrep($name) {
-    Get-Process $name
-}
-
-function head {
-    param($Path, $n = 10)
-    Get-Content $Path -Head $n
-}
-
-function tail {
-    param($Path, $n = 10, [switch]$f = $false)
-    Get-Content $Path -Tail $n -Wait:$f
-}
-
-# Quick File Creation
-function nf { param($name) New-Item -ItemType "file" -Path . -Name $name }
-
-# Directory Management
-function mkcd { param($dir) mkdir $dir -Force; Set-Location $dir }
-
-### Quality of Life Aliases
-
-# Navigation Shortcuts
-function docs {
-    $docs = if (([Environment]::GetFolderPath("MyDocuments"))) { ([Environment]::GetFolderPath("MyDocuments")) } else { $HOME + "\Documents" }
-    Set-Location -Path $docs
-}
-
-function dtop {
-    $dtop = if ([Environment]::GetFolderPath("Desktop")) { [Environment]::GetFolderPath("Desktop") } else { $HOME + "\Documents" }
-    Set-Location -Path $dtop
-}
-
-# Simplified Process Management
-function k9 { Stop-Process -Name $args[0] }
-
 # Enhanced Listing
-function la { Get-ChildItem -Path . -Force | Format-Table -AutoSize }
-function ll { Get-ChildItem -Path . -Force -Hidden | Format-Table -AutoSize }
+function ll { Get-ChildItem -Path . -Force | Format-Table -AutoSize }
 
 # Git Shortcuts
 function gs { git status }
@@ -754,9 +636,6 @@ if ($IsWindows) {
     }
 }
 
-# ensure PSReadLine is available
-try { Import-Module PSReadLine -ErrorAction Stop } catch {}
-
 if (Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue) {
 
     # options common to PSReadLine v1+ (PowerShell 5 and Core)
@@ -780,25 +659,31 @@ if (Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue) {
     }
 
     Set-PSReadLineOption @commonOpts
-
-    # prediction options only on PSReadLine v2.1+ (PSReadLine versions with prediction support)
-    $psrl = (Get-Module PSReadLine).Version
-    if ($psrl -ge [Version]'2.1' -and (Get-Command Set-PSReadLineOption).Parameters.ContainsKey('PredictionSource')) {
-        Set-PSReadLineOption -PredictionSource History -PredictionViewStyle ListView
-    }
 }
 
 # Custom key handlers
-Set-PSReadLineKeyHandler -Key UpArrow -Function HistorySearchBackward
-Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward
-Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
-Set-PSReadLineKeyHandler -Chord 'Ctrl+d' -Function DeleteChar
-Set-PSReadLineKeyHandler -Chord 'Ctrl+w' -Function BackwardDeleteWord
-Set-PSReadLineKeyHandler -Chord 'Alt+d' -Function DeleteWord
-Set-PSReadLineKeyHandler -Chord 'Ctrl+LeftArrow' -Function BackwardWord
-Set-PSReadLineKeyHandler -Chord 'Ctrl+RightArrow' -Function ForwardWord
-Set-PSReadLineKeyHandler -Chord 'Ctrl+z' -Function Undo
-Set-PSReadLineKeyHandler -Chord 'Ctrl+y' -Function Redo
+# Define key handler mappings
+$keyHandlers = @{
+    UpArrow          = 'HistorySearchBackward'
+    DownArrow        = 'HistorySearchForward'
+    Tab              = 'MenuComplete'
+    'Ctrl+d'         = 'DeleteChar'
+    'Ctrl+w'         = 'BackwardDeleteWord'
+    'Alt+d'          = 'DeleteWord'
+    'Ctrl+LeftArrow' = 'BackwardWord'
+    'Ctrl+RightArrow'= 'ForwardWord'
+    'Ctrl+z'         = 'Undo'
+    'Ctrl+y'         = 'Redo'
+}
+
+# Apply all key handlers
+foreach ($key in $keyHandlers.GetEnumerator()) {
+    $params = @{
+        Key      = $key.Name
+        Function = $key.Value
+    }
+    Set-PSReadLineKeyHandler @params
+}
 
 # Custom functions for PSReadLine
 Set-PSReadLineOption -AddToHistoryHandler {
@@ -845,6 +730,8 @@ Register-ArgumentCompleter -Native -CommandName dotnet -ScriptBlock $scriptblock
 
 # Initialize Oh My Posh theme
 function Get-Theme {
+    # Output the prompt theme using Oh My Posh
+    Write-Host "Using Oh My Posh theme from $OhMyPoshTheme" -ForegroundColor Cyan
     if ($IsMacOS) {
         $OhMyPoshCommand = "/opt/homebrew/bin/oh-my-posh"
     } elseif ($IsWindows) {
@@ -888,11 +775,6 @@ if ($IsMacOS) {
 ## Final Line to set prompt
 Get-Theme
 
-function Test-CommandExist {
-    param ([string]$command)
-    try { return $null -ne (Get-Command $command -ErrorAction Stop) } catch { return $false }
-}
-
 # Generic font detection that defers to platform-specific functions
 function Test-FontInstalled {
     param ([string]$FontName)
@@ -904,131 +786,7 @@ function Test-FontInstalled {
     return $false
 }
 
-# Help Function
-function Show-Help {
-    $helpText = @"
-$($PSStyle.Foreground.Cyan)PowerShell Profile Help$($PSStyle.Reset)
-$($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
 
-$($PSStyle.Foreground.Green)Update-Profile$($PSStyle.Reset) - Checks for profile updates from a remote repository and updates if necessary.
-
-$($PSStyle.Foreground.Green)Update-PowerShell$($PSStyle.Reset) - Checks for the latest PowerShell release and updates if a new version is available.
-
-$($PSStyle.Foreground.Green)Edit-Profile$($PSStyle.Reset) - Opens the current user's profile for editing using the configured editor.
-
-$($PSStyle.Foreground.Green)touch$($PSStyle.Reset) <file> - Creates a new empty file.
-
-$($PSStyle.Foreground.Green)ff$($PSStyle.Reset) <name> - Finds files recursively with the specified name.
-
-$($PSStyle.Foreground.Green)Get-PubIP$($PSStyle.Reset) - Retrieves the public IP address of the machine.
-
-$($PSStyle.Foreground.Green)winutil$($PSStyle.Reset) - Runs the latest WinUtil full-release script from Chris Titus Tech.
-
-$($PSStyle.Foreground.Green)winutildev$($PSStyle.Reset) - Runs the latest WinUtil pre-release script from Chris Titus Tech.
-
-$($PSStyle.Foreground.Green)uptime$($PSStyle.Reset) - Displays the system uptime.
-
-$($PSStyle.Foreground.Green)reload-profile$($PSStyle.Reset) - Reloads the current user's PowerShell profile.
-
-$($PSStyle.Foreground.Green)unzip$($PSStyle.Reset) <file> - Extracts a zip file to the current directory.
-
-$($PSStyle.Foreground.Green)hb$($PSStyle.Reset) <file> - Uploads the specified file's content to a hastebin-like service and returns the URL.
-
-$($PSStyle.Foreground.Green)grep$($PSStyle.Reset) <regex> [dir] - Searches for a regex pattern in files within the specified directory or from the pipeline input.
-
-$($PSStyle.Foreground.Green)df$($PSStyle.Reset) - Displays information about volumes.
-
-$($PSStyle.Foreground.Green)sed$($PSStyle.Reset) <file> <find> <replace> - Replaces text in a file.
-
-$($PSStyle.Foreground.Green)which$($PSStyle.Reset) <name> - Shows the path of the command.
-
-$($PSStyle.Foreground.Green)export$($PSStyle.Reset) <name> <value> - Sets an environment variable.
-
-$($PSStyle.Foreground.Green)pkill$($PSStyle.Reset) <name> - Kills processes by name.
-
-$($PSStyle.Foreground.Green)pgrep$($PSStyle.Reset) <name> - Lists processes by name.
-
-$($PSStyle.Foreground.Green)head$($PSStyle.Reset) <path> [n] - Displays the first n lines of a file (default 10).
-
-$($PSStyle.Foreground.Green)tail$($PSStyle.Reset) <path> [n] - Displays the last n lines of a file (default 10).
-
-$($PSStyle.Foreground.Green)nf$($PSStyle.Reset) <name> - Creates a new file with the specified name.
-
-$($PSStyle.Foreground.Green)mkcd$($PSStyle.Reset) <dir> - Creates and changes to a new directory.
-
-$($PSStyle.Foreground.Green)docs$($PSStyle.Reset) - Changes the current directory to the user's Documents folder.
-
-$($PSStyle.Foreground.Green)dtop$($PSStyle.Reset) - Changes the current directory to the user's Desktop folder.
-
-$($PSStyle.Foreground.Green)ep$($PSStyle.Reset) - Opens the profile for editing.
-
-$($PSStyle.Foreground.Green)k9$($PSStyle.Reset) <name> - Kills a process by name.
-
-$($PSStyle.Foreground.Green)la$($PSStyle.Reset) - Lists all files in the current directory with detailed formatting.
-
-$($PSStyle.Foreground.Green)ll$($PSStyle.Reset) - Lists all files, including hidden, in the current directory with detailed formatting.
-
-$($PSStyle.Foreground.Green)gs$($PSStyle.Reset) - Shortcut for 'git status'.
-
-$($PSStyle.Foreground.Green)ga$($PSStyle.Reset) - Shortcut for 'git add .'.
-
-$($PSStyle.Foreground.Green)gc$($PSStyle.Reset) <message> - Shortcut for 'git commit -m'.
-
-$($PSStyle.Foreground.Green)gp$($PSStyle.Reset) - Shortcut for 'git push'.
-
-$($PSStyle.Foreground.Green)g$($PSStyle.Reset) - Changes to the GitHub directory.
-
-$($PSStyle.Foreground.Green)gcom$($PSStyle.Reset) <message> - Adds all changes and commits with the specified message.
-
-$($PSStyle.Foreground.Green)lazyg$($PSStyle.Reset) <message> - Adds all changes, commits with the specified message, and pushes to the remote repository.
-
-$($PSStyle.Foreground.Green)sysinfo$($PSStyle.Reset) - Displays detailed system information.
-
-$($PSStyle.Foreground.Green)flushdns$($PSStyle.Reset) - Clears the DNS cache.
-
-$($PSStyle.Foreground.Green)cpy$($PSStyle.Reset) <text> - Copies the specified text to the clipboard.
-
-$($PSStyle.Foreground.Green)pst$($PSStyle.Reset) - Retrieves text from the clipboard.
-
-Use '$($PSStyle.Foreground.Magenta)Show-Help$($PSStyle.Reset)' to display this help message.
-"@
-    Write-Host $helpText
-}
-
-# Load custom user profile if it exists (dot-sourced for security - no Invoke-Expression)
-$customProfilePath = Join-Path $PSScriptRoot "CTTcustom.ps1"
-if (Test-Path $customProfilePath) {
-    try {
-        . $customProfilePath
-    } catch {
-        Write-Warning "Failed to load custom profile '$customProfilePath': $($_.Exception.Message)"
-    }
-}
-
-Write-Host "$($PSStyle.Foreground.Yellow)Use 'Show-Help' to display help$($PSStyle.Reset)"
-
-function Invoke-Spongebob {
-    [cmdletbinding()]
-    param(
-        [Parameter(HelpMessage = "provide string" , Mandatory = $true)]
-        [string]$Message
-    )
-    $charArray = $Message.ToCharArray()
-
-    foreach ($char in $charArray) {
-        $Var = $(Get-Random) % 2
-        if ($var -eq 0) {
-            $string = $char.ToString()
-            $Upper = $string.ToUpper()
-            $output = $output + $Upper
-        } else {
-            $lower = $char.ToString()
-            $output = $output + $lower
-        }
-    }
-    $output
-    $output = $null
-}
 function Search-YouTube {
     <#
     .SYNOPSIS
@@ -1062,8 +820,10 @@ function Search-YouTube {
     Write-Host "URL: $url" -ForegroundColor DarkGray
     Start-Process $url
 }
+
 # Alias for backward compatibility
 Set-Alias -Name yt -Value Search-YouTube
+
 function Get-InstalledModuleFast {
     param(
         #Modules to filter for. Wildcards are supported.
@@ -1240,7 +1000,6 @@ function Update-Modules {
         }
     }
 }
-
 function Install-LatestModule {
     <#
     .SYNOPSIS
@@ -1400,7 +1159,6 @@ function Install-LatestModule {
         Write-Host "`nModule reinstallation complete." -ForegroundColor Green
     }
 }
-
 function Show-Tree {
     [CmdletBinding(DefaultParameterSetName = 'Dirs')]
     param(
@@ -1532,7 +1290,7 @@ function Get-StoicQuote {
             }
 
             Write-Host ""
-            Write-Host "  — $author" -ForegroundColor Green
+            Write-Host "  - $author" -ForegroundColor Green
             Write-Host ""
         }
     } catch {
@@ -1547,7 +1305,7 @@ function Get-StoicQuote {
         Write-Host "  You have power over your mind - not outside events." -ForegroundColor White
         Write-Host "  Realize this, and you will find strength." -ForegroundColor White
         Write-Host ""
-        Write-Host "  — Marcus Aurelius" -ForegroundColor Green
+        Write-Host "  - Marcus Aurelius" -ForegroundColor Green
         Write-Host ""
     }
 }
@@ -1720,11 +1478,11 @@ function Update-NpmPackage {
 
                 # Try with rm command (works on macOS/Linux)
                 if ($IsMacOS -or $IsLinux) {
-                    $rmResult = & Remove-Item -rf $packagePath 2>&1
-                    if ($LASTEXITCODE -eq 0) {
-                        Write-Host "Successfully removed directory with rm command" -ForegroundColor Green
+                    $rmResult = Remove-Item -Path $packagePath -Recurse -Force -ErrorAction SilentlyContinue 2>&1
+                    if ($?) {
+                        Write-Host "Successfully removed directory with Remove-Item command" -ForegroundColor Green
                     } else {
-                        Write-Warning "rm command failed: $rmResult"
+                        Write-Warning "Remove-Item command failed: $rmResult"
                     }
                 }
             }
@@ -1816,6 +1574,102 @@ function Get-DotJustifiedLine {
 }
 
 function Get-SystemInfo {
+    [CmdletBinding()]
+    param(
+        [int]$CacheMinutes = 60,
+        [switch]$NoCache
+    )
+
+    # Cache file location
+    $cacheFile = "$env:TEMP\PSProfile_SystemInfo_Cache.json"
+
+    # Try to load from cache if not forced to skip
+    if (-not $NoCache -and (Test-Path $cacheFile)) {
+        try {
+            $cacheData = Get-Content $cacheFile -Raw | ConvertFrom-Json
+            $cacheTime = [DateTime]$cacheData.CacheTime
+
+            # Check if cache is still valid
+            if ((Get-Date) -lt $cacheTime.AddMinutes($CacheMinutes)) {
+                # Update dynamic fields and return cached data
+                $info = @{}
+                $cacheData.PSObject.Properties | Where-Object { $_.Name -ne 'CacheTime' } | ForEach-Object {
+                    $info[$_.Name] = $_.Value
+                }
+
+                # Refresh only dynamic fields (uptime, disk, battery)
+                if ($IsWindows) {
+                    # Uptime
+                    $uptime = (Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+                    $days = $uptime.Days
+                    $hours = $uptime.Hours
+                    $mins = $uptime.Minutes
+                    $uptimeStr = ""
+                    if ($days -gt 0) { $uptimeStr += "$days day$($days -ne 1 ? 's' : ''), " }
+                    if ($hours -gt 0) { $uptimeStr += "$hours hour$($hours -ne 1 ? 's' : ''), " }
+                    $uptimeStr += "$mins min$($mins -ne 1 ? 's' : '')"
+                    $info.Uptime = $uptimeStr
+
+                    # Disk Usage
+                    $disk = Get-PSDrive -Name C
+                    if ($disk) {
+                        $usedGB = [math]::Round(($disk.Used / 1GB), 1)
+                        $totalGB = [math]::Round(($disk.Used + $disk.Free) / 1GB, 1)
+                        $info.Disk = "${usedGB}G / ${totalGB}G"
+                    }
+
+                    # Battery (if laptop)
+                    try {
+                        $battery = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
+                        if ($battery) {
+                            $info.Battery = "$($battery.EstimatedChargeRemaining)%"
+                        }
+                    } catch { }
+                } elseif ($IsMacOS) {
+                    # Uptime
+                    try {
+                        $uptime = Get-Uptime
+                        $days = $uptime.Days
+                        $hours = $uptime.Hours
+                        $mins = $uptime.Minutes
+                        $uptimeStr = ""
+                        if ($days -gt 0) { $uptimeStr += "$days day$($days -ne 1 ? 's' : ''), " }
+                        if ($hours -gt 0) { $uptimeStr += "$hours hour$($hours -ne 1 ? 's' : ''), " }
+                        $uptimeStr += "$mins min$($mins -ne 1 ? 's' : '')"
+                        $info.Uptime = $uptimeStr
+                    } catch {
+                        $info.Uptime = "Unknown"
+                    }
+
+                    # Disk Usage
+                    $diskInfo = df -h / | Select-Object -Skip 1
+                    if ($diskInfo) {
+                        $diskParts = $diskInfo -split '\s+'
+                        $used = $diskParts[2]
+                        $total = $diskParts[1]
+                        $info.Disk = "$used / $total"
+                    }
+
+                    # Battery (if laptop)
+                    try {
+                        $batteryInfo = pmset -g batt 2>/dev/null
+                        if ($batteryInfo -and $batteryInfo -notmatch "No battery available") {
+                            $batteryMatch = $batteryInfo | Select-String -Pattern '(\d+)%'
+                            if ($batteryMatch) {
+                                $info.Battery = "$($batteryMatch.Matches[0].Groups[1].Value)%"
+                            }
+                        }
+                    } catch { }
+                }
+
+                return $info
+            }
+        } catch {
+            # Cache read failed, continue with full collection
+        }
+    }
+
+    # Full system info collection
     $info = @{}
 
     try {
@@ -2087,6 +1941,17 @@ function Get-SystemInfo {
         Write-Warning "Error gathering system information: $_"
     }
 
+    # Save to cache
+    if (-not $NoCache) {
+        try {
+            $cacheData = $info.Clone()
+            $cacheData['CacheTime'] = (Get-Date).ToString('o')
+            $cacheData | ConvertTo-Json -Depth 10 | Set-Content $cacheFile -Force
+        } catch {
+            # Cache save failed, continue without caching
+        }
+    }
+
     return $info
 }
 
@@ -2305,7 +2170,14 @@ function Show-SystemNeofetch {
             $startLine = [Console]::CursorTop
 
             # Render the Spectre image (this writes directly to console)
-            Get-SpectreImage -ImagePath $ProfileImage -MaxWidth 50
+            $spectreImageParams = @{
+                ImagePath = $ProfileImage
+                MaxWidth  = 50
+            }
+            if ($IsMacOS){
+                $spectreImageParams.MaxWidth = 80
+            }
+             Get-SpectreImage @spectreImageParams
 
             # Calculate how many lines the image took
             $endLine = [Console]::CursorTop
@@ -2597,7 +2469,7 @@ function Show-PriceSnapshot {
 }
 
 Clear-Host
-if (-not$isVSCode) {
+if (-not $isVSCode) {
     $OutputEncoding = [console]::InputEncoding = [console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
     Show-SystemNeofetch
 }
