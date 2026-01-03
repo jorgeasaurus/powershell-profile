@@ -310,29 +310,29 @@ if ($IsWindows) {
             Write-Verbose "Failed to set region: $_"
         }
 
-        Write-Verbose "Installing Microsoft Store for LTSC/WDAG..."
+        Write-Verbose "Installing Microsoft Store for Sandbox/WDAG..."
 
         try {
             $desktopPath = [Environment]::GetFolderPath('Desktop')
-            $repoPath = Join-Path $desktopPath 'LTSC-Add-MicrosoftStore'
+            $repoPath = Join-Path $desktopPath 'Sandbox-Add-MicrosoftStore'
 
             if (Get-Command git -ErrorAction SilentlyContinue) {
                 # Clone the repository
-                Write-Verbose "Cloning LTSC-Add-MicrosoftStore repository..."
-                git clone https://github.com/kkkgo/LTSC-Add-MicrosoftStore $repoPath 2>&1 | Out-Null
+                Write-Verbose "Cloning Sandbox-Add-MicrosoftStore repository..."
+                git clone https://github.com/jorgeasaurus/Sandbox-Add-MicrosoftStore $repoPath 2>&1 | Out-Null
 
                 if (Test-Path $repoPath) {
-                    # Run the add-store.cmd script
-                    $addStoreScript = Join-Path $repoPath 'add-store.cmd'
+                    # Run the Add-Microsoft-Store.ps1 script
+                    $addStoreScript = Join-Path $repoPath 'Add-Microsoft-Store.ps1'
                     if (Test-Path $addStoreScript) {
                         Write-Host "Installing Microsoft Store..." -ForegroundColor Yellow
-                        Start-Process -FilePath 'cmd.exe' -ArgumentList "/c `"$addStoreScript`"" -WorkingDirectory $repoPath -Wait -NoNewWindow
+                        pwsh -NoProfile -ExecutionPolicy Bypass -File $addStoreScript
                         Write-Host "[OK] Microsoft Store installation initiated" -ForegroundColor Green
                     } else {
-                        Write-Verbose "add-store.cmd not found in repository"
+                        Write-Verbose "Add-Microsoft-Store.ps1 not found in repository"
                     }
                 } else {
-                    Write-Verbose "Failed to clone LTSC-Add-MicrosoftStore repository"
+                    Write-Verbose "Failed to clone Sandbox-Add-MicrosoftStore repository"
                 }
             } else {
                 Write-Verbose "Git not available for cloning Microsoft Store installer. Install Git first."
