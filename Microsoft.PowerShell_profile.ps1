@@ -114,7 +114,6 @@ Import-Module -Name PSpreworkout
 try {
     # Check for PS7+ and import the module
     if ($PSVersionTable.PSVersion.Major -ge 7) {
-        $OutputEncoding = [console]::InputEncoding = [console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
         if (-not (Get-Module -ListAvailable -Name PwshSpectreConsole)) {
             Install-Module -Name PwshSpectreConsole -Scope CurrentUser -Force -SkipPublisherCheck
         }
@@ -2605,5 +2604,6 @@ function Show-PriceSnapshot {
 
 Clear-Host
 if (-not$isVSCode) {
+    $OutputEncoding = [console]::InputEncoding = [console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
     Show-SystemNeofetch
 }
