@@ -2184,7 +2184,7 @@ function Show-SystemNeofetch {
             # Render the Spectre image (this writes directly to console)
             $spectreImageParams = @{
                 ImagePath = $ProfileImage
-                MaxWidth  = 50
+                MaxWidth  = 40
             }
             if ($IsMacOS){
                 $spectreImageParams.MaxWidth = 70
