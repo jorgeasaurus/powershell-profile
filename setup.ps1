@@ -300,6 +300,16 @@ if ($IsWindows) {
     $currentUser = [Environment]::UserName
     if ($currentUser -eq 'WDAGUtilityAccount') {
         Write-Host "Detected Windows Defender Application Guard environment" -ForegroundColor Cyan
+
+        # Set region to United States
+        Write-Verbose "Setting Windows region to United States..."
+        try {
+            Set-WinHomeLocation -GeoId 244 -ErrorAction Stop  # 244 = United States
+            Write-Host "[OK] Region set to United States" -ForegroundColor Green
+        } catch {
+            Write-Verbose "Failed to set region: $_"
+        }
+
         Write-Verbose "Installing Microsoft Store for LTSC/WDAG..."
 
         try {
