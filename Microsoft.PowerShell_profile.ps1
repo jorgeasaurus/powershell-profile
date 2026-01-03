@@ -2187,7 +2187,7 @@ function Show-SystemNeofetch {
                 MaxWidth  = 50
             }
             if ($IsMacOS){
-                $spectreImageParams.MaxWidth = 80
+                $spectreImageParams.MaxWidth = 70
             }
              Get-SpectreImage @spectreImageParams
 
