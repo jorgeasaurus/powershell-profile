@@ -770,6 +770,88 @@ if ($IsMacOS) {
         Set-Alias brew /opt/homebrew/bin/brew
         Write-Host "Homebrew found at $homebrewPath" -ForegroundColor Green
     }
+
+    # Install Mole cleanup tool if not present
+    function Install-Mole {
+        <#
+        .SYNOPSIS
+            Installs Mole - a macOS tool to clean and organize files.
+        .DESCRIPTION
+            Checks if Mole is installed and installs it via Homebrew if not present.
+            Mole is a native macOS application for cleaning unnecessary files and organizing storage.
+        .EXAMPLE
+            Install-Mole
+        .LINK
+            https://github.com/tw93/Mole
+        #>
+        [CmdletBinding()]
+        param()
+
+        if (-not $IsMacOS) {
+            Write-Warning "Mole is only available for macOS"
+            return $false
+        }
+
+        if (-not (Get-Command brew -ErrorAction SilentlyContinue)) {
+            Write-Warning "Homebrew is required to install Mole. Please install Homebrew first."
+            return $false
+        }
+
+        # Check if Mole.app exists
+        $moleAppPath = "/Applications/Mole.app"
+        if (Test-Path $moleAppPath) {
+            Write-Host "Mole is already installed at $moleAppPath" -ForegroundColor Green
+            return $true
+        }
+
+        Write-Host "Installing Mole via Homebrew..." -ForegroundColor Cyan
+        try {
+            brew install --cask mole
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "✓ Mole installed successfully" -ForegroundColor Green
+                Write-Host "  Location: $moleAppPath" -ForegroundColor Gray
+                Write-Host "  Launch from Applications or use 'Open-Mole'" -ForegroundColor Gray
+                return $true
+            } else {
+                Write-Warning "Mole installation completed with exit code $LASTEXITCODE"
+                return $false
+            }
+        } catch {
+            Write-Error "Failed to install Mole: $_"
+            return $false
+        }
+    }
+
+    # Helper function to open Mole
+    function Open-Mole {
+        <#
+        .SYNOPSIS
+            Opens the Mole cleanup application.
+        .DESCRIPTION
+            Launches Mole to clean unnecessary files and organize storage on macOS.
+        .EXAMPLE
+            Open-Mole
+            Opens the Mole application
+        #>
+        [CmdletBinding()]
+        param()
+
+        $moleAppPath = "/Applications/Mole.app"
+        if (-not (Test-Path $moleAppPath)) {
+            Write-Warning "Mole is not installed. Run 'Install-Mole' to install it."
+            return
+        }
+
+        Write-Host "Opening Mole..." -ForegroundColor Cyan
+        try {
+            open -a Mole
+        } catch {
+            Write-Error "Failed to open Mole: $_"
+        }
+    }
+
+    # Convenient alias
+    Set-Alias -Name mole -Value Open-Mole -Description "Open Mole cleanup tool"
 }
 
 ## Final Line to set prompt
