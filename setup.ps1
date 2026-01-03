@@ -276,6 +276,61 @@ if ($IsWindows) {
     } catch {
         Write-Verbose "WinGet client setup skipped: $_"
     }
+
+    # Install Git
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        Write-Verbose "Installing Git..."
+        try {
+            winget install git.git --source winget --accept-package-agreements --accept-source-agreements --silent --disable-interactivity 2>&1 | Out-Null
+
+            # Refresh PATH
+            $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User')
+
+            if (Get-Command git -ErrorAction SilentlyContinue) {
+                Write-Host "[OK] Git installed" -ForegroundColor Green
+            } else {
+                Write-Verbose "Git installation completed but command not immediately available. May require shell restart."
+            }
+        } catch {
+            Write-Verbose "Git installation skipped: $_"
+        }
+    }
+
+    # Windows Defender Application Guard (WDAG) - Microsoft Store installer
+    $currentUser = [Environment]::UserName
+    if ($currentUser -eq 'WDAGUtilityAccount') {
+        Write-Host "Detected Windows Defender Application Guard environment" -ForegroundColor Cyan
+        Write-Verbose "Installing Microsoft Store for LTSC/WDAG..."
+
+        try {
+            $desktopPath = [Environment]::GetFolderPath('Desktop')
+            $repoPath = Join-Path $desktopPath 'LTSC-Add-MicrosoftStore'
+
+            if (Get-Command git -ErrorAction SilentlyContinue) {
+                # Clone the repository
+                Write-Verbose "Cloning LTSC-Add-MicrosoftStore repository..."
+                git clone https://github.com/kkkgo/LTSC-Add-MicrosoftStore $repoPath 2>&1 | Out-Null
+
+                if (Test-Path $repoPath) {
+                    # Run the add-store.cmd script
+                    $addStoreScript = Join-Path $repoPath 'add-store.cmd'
+                    if (Test-Path $addStoreScript) {
+                        Write-Host "Installing Microsoft Store..." -ForegroundColor Yellow
+                        Start-Process -FilePath 'cmd.exe' -ArgumentList "/c `"$addStoreScript`"" -WorkingDirectory $repoPath -Wait -NoNewWindow
+                        Write-Host "[OK] Microsoft Store installation initiated" -ForegroundColor Green
+                    } else {
+                        Write-Verbose "add-store.cmd not found in repository"
+                    }
+                } else {
+                    Write-Verbose "Failed to clone LTSC-Add-MicrosoftStore repository"
+                }
+            } else {
+                Write-Verbose "Git not available for cloning Microsoft Store installer. Install Git first."
+            }
+        } catch {
+            Write-Verbose "Microsoft Store installation for WDAG skipped: $_"
+        }
+    }
 }
 
 # ============================================================================

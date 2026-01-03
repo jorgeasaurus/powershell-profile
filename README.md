@@ -36,12 +36,14 @@ A cross-platform, feature-rich PowerShell profile that brings a beautiful termin
 - **Price tracking** - Live cryptocurrency (BTC, ETH) and stock price display
 
 ### 🚀 Utility Functions
-- **Navigation**: Enhanced `cd`, directory shortcuts (`docs`, `dtop`)
-- **File Operations**: `touch`, `ff` (find file), `grep` alternatives
-- **Git Integration**: Quick status, commits, and repository management
-- **System Tools**: `reload-profile`, `uptime`, `sysinfo`, `pkill`
+- **Git Integration**: Quick status, commits, and repository management (`gs`, `ga`, `gc`, `gp`, `gcl`, `gcom`, `lazyg`)
+- **System Tools**: `reload-profile`, `uptime`, `admin` (Windows), `Get-PubIP`
+- **Clipboard**: `cpy` (copy), `pst` (paste)
 - **PowerShell Updates**: `Update-PowerShell` with automatic version checking
 - **Module Management**: `Initialize-ProfileModules`, `Update-Modules`, `Install-LatestModule`
+- **Development**: `Update-ClaudeCode`, `Update-NpmPackage`, `Search-YouTube`
+- **Microsoft Graph**: `Connect-GraphSession`, `graph`, `Get-CredentialsFromKeyVault`
+- **Utilities**: `Show-Tree`, `Get-StoicQuote`, `Get-Theme`
 
 ### 📊 Extra Features
 - **Live Price Display**: BTC, ETH, and customizable stock ticker in neofetch
@@ -218,23 +220,8 @@ Get-SystemInfo
 # Show uptime
 uptime
 
-# System information shortcut
-sysinfo
-```
-
-### Navigation
-
-```powershell
-# Quick directory navigation
-docs        # ~/Documents
-dtop        # ~/Desktop
-onedrive    # ~/OneDrive
-
-# Find files
-ff "*.ps1"  # Find all PowerShell files
-
-# Enhanced cd with auto-completion
-cd projects
+# Get public IP address
+Get-PubIP
 ```
 
 ### Git Shortcuts
@@ -243,14 +230,52 @@ cd projects
 # Git status
 gs
 
+# Git add all
+ga
+
+# Git commit
+gc "commit message"
+
+# Git push
+gp
+
+# Git clone
+gcl https://github.com/user/repo
+
 # Git add all and commit
 gcom "commit message"
 
-# Git log pretty
-glog
+# Lazy git (add all, commit, push)
+lazyg "commit message"
+```
 
-# Clone and navigate into repo
-gclon https://github.com/user/repo
+### Clipboard Utilities
+
+```powershell
+# Copy to clipboard
+cpy "text to copy"
+
+# Paste from clipboard
+pst
+```
+
+### Development Tools
+
+```powershell
+# Search YouTube
+Search-YouTube "search query"
+
+# Update Claude Code
+Update-ClaudeCode
+
+# Update NPM package
+Update-NpmPackage -PackageName "package-name"
+
+# Display directory tree
+Show-Tree
+
+# Get stoic quote
+Get-StoicQuote
 ```
 
 ## 🎯 Key Functions
@@ -262,27 +287,67 @@ gclon https://github.com/user/repo
 - `reload-profile` - Reload the current profile
 - `Initialize-ProfileModules` - Initialize/install required modules
 
-### PowerShell Management
+### PowerShell & Module Management
 
 - `Update-PowerShell` - Check and install latest PowerShell version
 - `Update-Modules` - Update installed modules
 - `Install-LatestModule` - Install/reinstall latest version of a module
+- `Get-InstalledModuleFast` - Quickly list installed modules
 
 ### System Utilities
 
 - `Get-SystemInfo` - Get system information (with smart caching)
-- `admin` - Open new PowerShell window as administrator (Windows)
+- `Show-SystemNeofetch` - Display neofetch-style system info with ASCII art
+- `admin` - Open new PowerShell window as administrator (Windows only)
 - `uptime` - Show system uptime
-- `pkill` - Kill processes by name
-- `grep` - Search file contents
-- `touch` - Create new file(s)
-- `ff` - Find files by pattern
+- `Get-PubIP` - Get your public IP address
+
+### File Operations
+
+- `ll` - List all files including hidden files in table format
+
+### Git Functions
+
+- `gs` - Git status
+- `ga` - Git add all
+- `gc` - Git commit with message
+- `gp` - Git push
+- `gcl` - Git clone
+- `gcom` - Git add all and commit
+- `lazyg` - Git add all, commit, and push
+
+### Clipboard & Text
+
+- `cpy` - Copy text to clipboard
+- `pst` - Paste text from clipboard
+
+### Price Tracking
+
+- `Get-CryptoPrice` - Get cryptocurrency prices
+- `Get-StockPrice` - Get stock prices
+- `Show-PriceSnapshot` - Display BTC, ETH, and stock prices
+
+### Development Tools
+
+- `Update-ClaudeCode` - Update Claude Code CLI
+- `Update-NpmPackage` - Update NPM packages
+- `Search-YouTube` - Search YouTube from terminal
+
+### Utilities
+
+- `Show-Tree` - Display directory tree structure
+- `Get-StoicQuote` - Get a random stoic quote
+- `Get-Theme` - Get Oh My Posh theme configuration
+- `Test-FontInstalled` - Check if a Nerd Font is installed
+- `Get-CredentialsFromKeyVault` - Get credentials from Azure Key Vault
+- `Connect-GraphSession` - Connect to Microsoft Graph
+- `graph` - Microsoft Graph shortcut
 
 ### Cleanup
 
-- `Clear-Cache` - Clear system caches (Windows/Mac specific)
-- `Clear-WindowsCache` - Clear Windows temp files, prefetch, etc.
-- `Clear-MacCache` - Clear macOS caches
+- `Clear-Cache` - Clear system caches (cross-platform wrapper)
+- `Clear-WindowsCache` - Clear Windows temp files, prefetch, etc. (Windows only)
+- `Clear-MacCache` - Clear macOS caches (macOS only)
 
 ## 🔄 Auto-Update System
 
