@@ -1775,8 +1775,6 @@ function Update-ClaudeCode {
     Update-NpmPackage -PackageName "@anthropic-ai/claude-code"
 }
 
-
-
 function Get-ColoredText {
     param(
         [string]$Text,
@@ -2115,7 +2113,7 @@ function Show-SystemNeofetch {
     param(
         [switch]$NoColor,
         [string]$CustomAscii,
-        [string]$ProfileImage = "/Users/jorgeasaurus/Library/CloudStorage/OneDrive-Personal/profilepic.jpeg"
+        [string]$ProfileImage = "$OneDrive/10-19_Personal_Projects/14_Scripts_Utilities/profilepic.jpeg"
     )
 
     # ANSI color codes
