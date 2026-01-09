@@ -190,7 +190,7 @@ if (($IsWindows -or $PSVersionTable.PSEdition -ne 'Core') -and $PSVersionTable.P
         # Install via WinGet if we have it and haven't already installed via MSI
         if (-not $installedViaMsi -and (Get-Command winget -ErrorAction SilentlyContinue)) {
             Write-Host "Installing PowerShell 7..." -ForegroundColor Cyan
-            winget install -e --id Microsoft.PowerShell --accept-package-agreements --accept-source-agreements --silent
+            winget install -e --id Microsoft.PowerShell --accept-package-agreements --accept-source-agreements --silent --source winget
 
             # Refresh PATH
             $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User')
