@@ -2,10 +2,7 @@
 ### Version 1.03 - Refactored
 
 $debug = $false
-$isVSCode = ($env:TERM_PROGRAM -eq 'vscode')
-if ($(Get-Location) -like "*code*" -and ((Test-Path "./.claude") -or (Test-Path "./.git"))){
-    return
-}
+
 # Define the update interval in days, set to -1 to always check
 $updateInterval = 7
 
@@ -2561,8 +2558,13 @@ function Show-PriceSnapshot {
     Write-Host "  Updated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor DarkGray
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" -ForegroundColor DarkGray
 }
-
 Clear-Host
-if (-not $isVSCode) {
+
+$isVSCode = ($env:TERM_PROGRAM -eq 'vscode')
+if (($(Get-Location) -like "*code*" -and ((Test-Path "./.claude") -or (Test-Path "./.git"))) -or $isVSCode) {
+    return
+}else{
     Show-SystemNeofetch
 }
+
+
