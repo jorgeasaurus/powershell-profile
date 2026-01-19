@@ -1,7 +1,14 @@
 ﻿### PowerShell Profile Refactor
-### Version 1.03 - Refactored
+### Version 1.04 - Simplified
 
 $debug = $false
+
+# Light mode: Set $env:PROFILE_LIGHT=1 to skip network calls, neofetch, and module checks
+# Useful for non-interactive shells, scripts, or constrained environments
+$script:LightMode = $env:PROFILE_LIGHT -eq '1'
+
+# Skip neofetch on startup (set to $true to disable system info display)
+$script:SkipNeofetch = $false
 
 # Define the update interval in days, set to -1 to always check
 $updateInterval = 7
@@ -170,8 +177,10 @@ Run 'Initialize-ProfileModules -Install' to install them, or install manually:
     }
 }
 
-# Initialize modules (import only, no auto-install)
-Initialize-ProfileModules
+# Initialize modules (import only, no auto-install) - skip in light mode
+if (-not $script:LightMode) {
+    Initialize-ProfileModules
+}
 
 # Windows-specific functions
 if ($IsWindows) {
@@ -517,11 +526,13 @@ function Save-UpdateTimestamp {
     (Get-Date -Format 'yyyy-MM-dd') | Out-File -FilePath $TimeFilePath -Force
 }
 
-# Check for profile and PowerShell updates (single interval gate)
-if (-not $debug -and (Test-UpdateDue -TimeFilePath $timeFilePath -IntervalDays $updateInterval)) {
+# Check for profile and PowerShell updates (single interval gate) - skip in light mode
+if (-not $script:LightMode -and -not $debug -and (Test-UpdateDue -TimeFilePath $timeFilePath -IntervalDays $updateInterval)) {
     Update-Profile
     Update-PowerShell
     Save-UpdateTimestamp -TimeFilePath $timeFilePath
+} elseif ($script:LightMode) {
+    # Silent in light mode
 } elseif (-not $debug) {
     Write-Warning "Profile/PowerShell update skipped. Last update check was within the last $updateInterval day(s)."
 } else {
@@ -1424,7 +1435,8 @@ function Connect-GraphSession {
         Connects to Microsoft Graph using Azure Key Vault credentials
     .DESCRIPTION
         Securely retrieves credentials from Azure Key Vault and establishes
-        a Microsoft Graph connection. Credentials are cleaned up after use.
+        a Microsoft Graph connection using Azure.Identity ClientSecretCredential.
+        Credentials are cleaned up after use.
     .PARAMETER KeyVaultName
         The name of the Azure Key Vault. Defaults to 'jrgsrs-keyvault'.
     .EXAMPLE
@@ -1438,7 +1450,19 @@ function Connect-GraphSession {
         [string]$KeyVaultName = "jrgsrs-keyvault"
     )
 
+    $clientSecretCredential = $null
+
     try {
+        # Check if Azure.Identity is available
+        if (-not ([System.Management.Automation.PSTypeName]'Azure.Identity.ClientSecretCredential').Type) {
+            # Try to load the assembly
+            try {
+                Add-Type -AssemblyName "Azure.Identity" -ErrorAction Stop
+            } catch {
+                throw "Azure.Identity assembly not found. Install the Microsoft.Graph module or Azure.Identity package."
+            }
+        }
+
         # Connect to Azure if needed
         $azContext = Get-AzContext -ErrorAction SilentlyContinue
         if (-not $azContext) {
@@ -1450,12 +1474,24 @@ function Connect-GraphSession {
         Write-Host "Retrieving credentials from Key Vault..." -ForegroundColor Cyan
         $creds = Get-CredentialsFromKeyVault -KeyVaultName $KeyVaultName
 
-        # Build PSCredential for Graph connection
-        $credential = [PSCredential]::new($creds.ClientId, $creds.ClientSecretSecure)
+        # Convert SecureString to plain text for Azure.Identity
+        $clientSecretPlain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
+            [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($creds.ClientSecretSecure)
+        )
 
-        # Connect to Graph using client credentials (no env vars needed)
+        # Build Azure.Identity ClientSecretCredential (required by Connect-MgGraph)
+        $clientSecretCredential = [Azure.Identity.ClientSecretCredential]::new(
+            $creds.TenantId,
+            $creds.ClientId,
+            $clientSecretPlain
+        )
+
+        # Clear plain text secret immediately
+        $clientSecretPlain = $null
+
+        # Connect to Graph using proper credential type
         Write-Host "Connecting to Microsoft Graph..." -ForegroundColor Cyan
-        Connect-MgGraph -TenantId $creds.TenantId -ClientSecretCredential $credential -NoWelcome -ErrorAction Stop
+        Connect-MgGraph -ClientSecretCredential $clientSecretCredential -TenantId $creds.TenantId -NoWelcome -ErrorAction Stop
 
         # Verify connection
         $context = Get-MgContext
@@ -1472,16 +1508,11 @@ function Connect-GraphSession {
             $creds.ClientSecretSecure = $null
             $creds = $null
         }
-        if ($credential) {
-            $credential = $null
+        if ($clientSecretCredential) {
+            $clientSecretCredential = $null
         }
         [System.GC]::Collect()
     }
-}
-# Backward compatibility alias
-function graph {
-    Write-Warning "The 'graph' function is deprecated. Use 'Connect-GraphSession' instead."
-    Connect-GraphSession
 }
 # Create an alias for easier access
 Set-Alias -Name "stoic" -Value "Get-StoicQuote" -Description "Get a random stoic quote"
@@ -2558,12 +2589,10 @@ function Show-PriceSnapshot {
     Write-Host "  Updated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor DarkGray
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" -ForegroundColor DarkGray
 }
-Clear-Host
-
+# Display neofetch on startup (respects light mode and skip flags)
 $isVSCode = ($env:TERM_PROGRAM -eq 'vscode')
-if (($(Get-Location) -like "*code*" -and ((Test-Path "./.claude") -or (Test-Path "./.git"))) -or $isVSCode) {
-    return
-}else{
+if (-not $script:LightMode -and -not $script:SkipNeofetch -and -not $isVSCode) {
+    Clear-Host
     Show-SystemNeofetch
 }
 
