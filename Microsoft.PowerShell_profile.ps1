@@ -526,19 +526,6 @@ function Save-UpdateTimestamp {
     (Get-Date -Format 'yyyy-MM-dd') | Out-File -FilePath $TimeFilePath -Force
 }
 
-# Check for profile and PowerShell updates (single interval gate) - skip in light mode
-if (-not $script:LightMode -and -not $debug -and (Test-UpdateDue -TimeFilePath $timeFilePath -IntervalDays $updateInterval)) {
-    Update-Profile
-    Update-PowerShell
-    Save-UpdateTimestamp -TimeFilePath $timeFilePath
-} elseif ($script:LightMode) {
-    # Silent in light mode
-} elseif (-not $debug) {
-    Write-Warning "Profile/PowerShell update skipped. Last update check was within the last $updateInterval day(s)."
-} else {
-    Write-Warning "Skipping profile/PowerShell update check in debug mode"
-}
-
 function Update-PowerShell {
     try {
         Write-Host "Checking for PowerShell updates..." -ForegroundColor Cyan
@@ -572,6 +559,21 @@ function Update-PowerShell {
         Write-Error "Failed to update PowerShell. Error: $_"
     }
 }
+
+# Check for profile and PowerShell updates (single interval gate) - skip in light mode
+if (-not $script:LightMode -and -not $debug -and (Test-UpdateDue -TimeFilePath $timeFilePath -IntervalDays $updateInterval)) {
+    Update-Profile
+    Update-PowerShell
+    Save-UpdateTimestamp -TimeFilePath $timeFilePath
+} elseif ($script:LightMode) {
+    # Silent in light mode
+} elseif (-not $debug) {
+    Write-Warning "Profile/PowerShell update skipped. Last update check was within the last $updateInterval day(s)."
+} else {
+    Write-Warning "Skipping profile/PowerShell update check in debug mode"
+}
+
+
 
 function Clear-Cache {
     Write-Host "Clearing cache..." -ForegroundColor Cyan
