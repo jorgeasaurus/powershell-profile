@@ -8,7 +8,7 @@ $debug = $false
 $script:LightMode = $env:PROFILE_LIGHT -eq '1'
 
 # Skip neofetch on startup (set to $true to disable system info display)
-$script:SkipNeofetch = $false
+$script:SkipNeofetch = $true
 
 # Define the update interval in days, set to -1 to always check
 $updateInterval = 7
