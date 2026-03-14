@@ -87,15 +87,12 @@ if ($IsWindows -or $PSVersionTable.PSEdition -ne 'Core') {
 if (($IsWindows -or $PSVersionTable.PSEdition -ne 'Core') -and $PSVersionTable.PSVersion.Major -lt 7) {
     Write-Host "PowerShell 7 required. Installing..." -ForegroundColor Cyan
 
-    # Install PowerShell 7 directly if we don't have it
     if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) {
         $installedViaMsi = $false
 
-        # Check if WinGet is available
         if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
             Write-Host "Installing WinGet..." -ForegroundColor Yellow
 
-            # Try method 1: App Installer registration (works on normal Windows)
             try {
                 Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe -ErrorAction Stop
                 $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User')
@@ -107,13 +104,11 @@ if (($IsWindows -or $PSVersionTable.PSEdition -ne 'Core') -and $PSVersionTable.P
             } catch {
                 Write-Verbose "App Installer registration failed, trying direct MSI installation for PowerShell 7..."
 
-                # Method 2: Install PowerShell 7 directly via MSI (most reliable for Sandbox/WDAG)
                 try {
                     Write-Host "Downloading PowerShell 7 MSI..." -ForegroundColor Yellow
                     $tempDir = "$env:TEMP\pwsh-install"
                     New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 
-                    # Get latest PowerShell release
                     $psRelease = Invoke-RestMethod -Uri 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest' -UseBasicParsing
                     $msiAsset = $psRelease.assets | Where-Object { $_.name -like '*win-x64.msi' } | Select-Object -First 1
 
@@ -146,7 +141,6 @@ if (($IsWindows -or $PSVersionTable.PSEdition -ne 'Core') -and $PSVersionTable.P
                     # Refresh PATH
                     $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User')
 
-                    # Cleanup
                     Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 
                     if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) {
@@ -158,7 +152,6 @@ if (($IsWindows -or $PSVersionTable.PSEdition -ne 'Core') -and $PSVersionTable.P
                 } catch {
                     Write-Verbose "Direct MSI installation failed: $($_.Exception.Message)"
 
-                    # Method 3: Microsoft's official installation script
                     try {
                         Write-Host "Trying Microsoft's official PowerShell installer..." -ForegroundColor Yellow
                         $installScript = Invoke-RestMethod -Uri 'https://aka.ms/install-powershell.ps1' -UseBasicParsing
@@ -187,7 +180,6 @@ if (($IsWindows -or $PSVersionTable.PSEdition -ne 'Core') -and $PSVersionTable.P
             }
         }
 
-        # Install via WinGet if we have it and haven't already installed via MSI
         if (-not $installedViaMsi -and (Get-Command winget -ErrorAction SilentlyContinue)) {
             Write-Host "Installing PowerShell 7..." -ForegroundColor Cyan
             winget install -e --id Microsoft.PowerShell --accept-package-agreements --accept-source-agreements --silent --source winget
@@ -235,7 +227,6 @@ try {
 # ============================================================================
 
 if ($IsWindows) {
-    # NuGet Provider
     Write-Verbose "Checking NuGet provider..."
     $nuget = Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue
     if (-not $nuget -or $nuget.Version -lt '2.8.5.201') {
@@ -244,7 +235,6 @@ if ($IsWindows) {
         Write-Host "[OK] NuGet provider installed" -ForegroundColor Green
     }
 
-    # Trust PSGallery
     Write-Verbose "Configuring PSGallery..."
     if ((Get-PSRepository -Name PSGallery).InstallationPolicy -ne 'Trusted') {
         Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
@@ -277,7 +267,6 @@ if ($IsWindows) {
         Write-Verbose "WinGet client setup skipped: $_"
     }
 
-    # Install Git
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         Write-Verbose "Installing Git..."
         try {
@@ -296,12 +285,10 @@ if ($IsWindows) {
         }
     }
 
-    # Windows Defender Application Guard (WDAG) - Microsoft Store installer
     $currentUser = [Environment]::UserName
     if ($currentUser -eq 'WDAGUtilityAccount') {
         Write-Host "Detected Windows Defender Application Guard environment" -ForegroundColor Cyan
 
-        # Set region to United States
         Write-Verbose "Setting Windows region to United States..."
         try {
             Set-WinHomeLocation -GeoId 244 -ErrorAction Stop  # 244 = United States
@@ -317,12 +304,10 @@ if ($IsWindows) {
             $repoPath = Join-Path $desktopPath 'Sandbox-Add-MicrosoftStore'
 
             if (Get-Command git -ErrorAction SilentlyContinue) {
-                # Clone the repository
                 Write-Verbose "Cloning Sandbox-Add-MicrosoftStore repository..."
                 git clone https://github.com/jorgeasaurus/Sandbox-Add-MicrosoftStore $repoPath 2>&1 | Out-Null
 
                 if (Test-Path $repoPath) {
-                    # Run the Add-Microsoft-Store.ps1 script
                     $addStoreScript = Join-Path $repoPath 'Add-Microsoft-Store.ps1'
                     if (Test-Path $addStoreScript) {
                         Write-Host "Installing Microsoft Store..." -ForegroundColor Yellow
@@ -420,7 +405,6 @@ if ($IsWindows) {
 # Install Core Modules
 # ============================================================================
 
-# Terminal-Icons
 if (-not (Get-Module -ListAvailable -Name Terminal-Icons)) {
     Write-Verbose "Installing Terminal-Icons..."
     Install-Module -Name Terminal-Icons -Scope CurrentUser -Force -AllowClobber -Repository PSGallery
@@ -432,14 +416,12 @@ if (-not (Get-Module -ListAvailable -Name Terminal-Icons)) {
 # ============================================================================
 
 if ($IsWindows) {
-    # PSPreworkout (contains Install-WinGet and other utilities)
     if (-not (Get-Module -ListAvailable -Name PSPreworkout)) {
         Write-Verbose "Installing PSPreworkout..."
         Install-Module PSPreworkout -Force -AllowClobber -Scope CurrentUser -Repository PSGallery
         Write-Host "[OK] PSPreworkout installed" -ForegroundColor Green
     }
 
-    # PwshSpectreConsole (for Show-SystemNeofetch)
     if (-not (Get-Module -ListAvailable -Name PwshSpectreConsole)) {
         Write-Verbose "Installing PwshSpectreConsole..."
         $OutputEncoding = [console]::InputEncoding = [console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
@@ -447,7 +429,6 @@ if ($IsWindows) {
         Write-Host "[OK] PwshSpectreConsole installed" -ForegroundColor Green
     }
 
-    # Optional: PsTools
     if (-not $SkipOptional) {
         Write-Verbose "Installing Sysinternals PsTools..."
         try {
@@ -460,7 +441,6 @@ if ($IsWindows) {
         }
     }
 
-    # Optional: CMTrace Symlink
     if (-not $SkipOptional) {
         Write-Verbose "Installing CMTrace symlink..."
         try {
@@ -482,20 +462,13 @@ if ($IsWindows) {
 if ($IsWindows) {
     Write-Verbose "Ensuring Windows Terminal is installed..."
 
-    $wtInstalled = $false
-    $wtExecutable = $null
+    $wtExecutable = (Get-Command wt -ErrorAction SilentlyContinue).Source
 
-    $wtCommand = Get-Command wt -ErrorAction SilentlyContinue
-    if ($wtCommand) {
-        $wtExecutable = $wtCommand.Source
-        $wtInstalled = $true
-    } else {
+    if (-not $wtExecutable) {
         try {
             winget install -e --id Microsoft.WindowsTerminal --accept-package-agreements --accept-source-agreements --silent --disable-interactivity --source winget 2>&1 | Out-Null
-            $wtCommand = Get-Command wt -ErrorAction SilentlyContinue
-            if ($wtCommand) {
-                $wtExecutable = $wtCommand.Source
-                $wtInstalled = $true
+            $wtExecutable = (Get-Command wt -ErrorAction SilentlyContinue).Source
+            if ($wtExecutable) {
                 Write-Host "[OK] Windows Terminal installed" -ForegroundColor Green
             }
         } catch {
@@ -507,26 +480,22 @@ if ($IsWindows) {
         $fallbackWt = "$env:LOCALAPPDATA\Microsoft\WindowsApps\wt.exe"
         if (Test-Path $fallbackWt) {
             $wtExecutable = $fallbackWt
-            $wtInstalled = $true
         }
     }
 
-    if ($wtInstalled) {
+    if ($wtExecutable) {
         Write-Verbose "Configuring Windows Terminal..."
 
         $wtSettingsPath = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
 
         if (Test-Path $wtSettingsPath) {
             try {
-                # Backup existing settings
                 $backupPath = "$wtSettingsPath.backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
                 Copy-Item $wtSettingsPath $backupPath -Force
                 Write-Verbose "Settings backed up to: $backupPath"
 
-                # Read and modify settings
                 $settings = Get-Content $wtSettingsPath -Raw | ConvertFrom-Json
 
-                # Find PowerShell Core profile (GUID-independent)
                 $pwshProfile = $settings.profiles.list | Where-Object {
                     $_.name -eq 'PowerShell' -and $_.source -eq 'Windows.Terminal.PowershellCore'
                 }
@@ -534,7 +503,6 @@ if ($IsWindows) {
                 if ($pwshProfile) {
                     $settings.defaultProfile = $pwshProfile.guid
 
-                    # Initialize defaults if needed
                     if (-not $settings.profiles.defaults) {
                         $settings.profiles | Add-Member -NotePropertyName 'defaults' -NotePropertyValue ([PSCustomObject]@{}) -Force
                     }
@@ -542,13 +510,11 @@ if ($IsWindows) {
                         $settings.profiles.defaults | Add-Member -NotePropertyName 'font' -NotePropertyValue ([PSCustomObject]@{}) -Force
                     }
 
-                    # Configure appearance
                     $settings.profiles.defaults.font | Add-Member -NotePropertyName 'face' -NotePropertyValue 'CaskaydiaCove Nerd Font Mono' -Force
                     $settings.profiles.defaults | Add-Member -NotePropertyName 'opacity' -NotePropertyValue 87 -Force
                     $settings.profiles.defaults | Add-Member -NotePropertyName 'useAcrylic' -NotePropertyValue $true -Force
                     $settings | Add-Member -NotePropertyName 'initialCols' -NotePropertyValue 150 -Force
 
-                    # Save settings
                     $settings | ConvertTo-Json -Depth 100 | Set-Content $wtSettingsPath -Encoding UTF8
 
                     Write-Host "[OK] Windows Terminal configured (PowerShell 7 default)" -ForegroundColor Green

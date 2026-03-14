@@ -1,6 +1,6 @@
 ﻿### PowerShell Profile Refactor
 ### Version 1.04 - Simplified
-
+$OutputEncoding = [console]::InputEncoding = [console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 $debug = $false
 
 # Light mode: Set $env:PROFILE_LIGHT=1 to skip network calls, neofetch, and module checks
@@ -25,7 +25,6 @@ if ($debug) {
     Write-Host "#               version               #" -ForegroundColor Red
     Write-Host "#######################################" -ForegroundColor Red
 }
-
 
 #################################################################################################################################
 ############                                                                                                         ############
@@ -642,8 +641,6 @@ if (-not $script:LightMode -and -not $debug -and (Test-UpdateDue -TimeFilePath $
     Write-Warning "Skipping profile/PowerShell update check in debug mode"
 }
 
-
-
 function Clear-Cache {
     Write-Host "Clearing cache..." -ForegroundColor Cyan
 
@@ -658,7 +655,6 @@ function Clear-Cache {
 
     Write-Host "Cache clearing completed." -ForegroundColor Green
 }
-
 
 # OS-agnostic Utility Functions
 
@@ -699,15 +695,12 @@ function lazyg {
     git push
 }
 
-# Quick Access to System Information
 # Clipboard Utilities
 function cpy { Set-Clipboard $args[0] }
 
 function pst { Get-Clipboard }
 
-# Enhanced PowerShell Experience
-# Enhanced PSReadLine Configuration
-# Import PSReadLine module
+# PSReadLine Configuration
 if ($IsWindows) {
     try { Import-Module PSReadLine }
     catch {
@@ -740,8 +733,7 @@ if (Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue) {
     Set-PSReadLineOption @commonOpts
 }
 
-# Custom key handlers
-# Define key handler mappings
+# Key handler mappings
 $keyHandlers = @{
     UpArrow          = 'HistorySearchBackward'
     DownArrow        = 'HistorySearchForward'
@@ -755,16 +747,10 @@ $keyHandlers = @{
     'Ctrl+y'         = 'Redo'
 }
 
-# Apply all key handlers
 foreach ($key in $keyHandlers.GetEnumerator()) {
-    $params = @{
-        Key      = $key.Name
-        Function = $key.Value
-    }
-    Set-PSReadLineKeyHandler @params
+    Set-PSReadLineKeyHandler -Key $key.Name -Function $key.Value
 }
 
-# Custom functions for PSReadLine
 Set-PSReadLineOption -AddToHistoryHandler {
     param($line)
     $sensitive = @('password', 'secret', 'token', 'apikey', 'connectionstring')
@@ -772,7 +758,6 @@ Set-PSReadLineOption -AddToHistoryHandler {
     return ($null -eq $hasSensitive)
 }
 
-# Improved prediction settings (PS5/Core compatible)
 if ((Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue).Parameters.ContainsKey('PredictionSource')) {
     $psrl = (Get-Module PSReadLine).Version
     $source = if ($psrl -ge [Version]'2.1') { 'HistoryAndPlugin' } else { 'History' }
@@ -807,9 +792,7 @@ $scriptblock = {
 }
 Register-ArgumentCompleter -Native -CommandName dotnet -ScriptBlock $scriptblock
 
-# Initialize Oh My Posh theme
 function Get-Theme {
-    # Output the prompt theme using Oh My Posh
     Write-Host "Using Oh My Posh theme from $OhMyPoshTheme" -ForegroundColor Cyan
     if ($IsMacOS) {
         $OhMyPoshCommand = "/opt/homebrew/bin/oh-my-posh"
@@ -933,10 +916,8 @@ if ($IsMacOS) {
     Set-Alias -Name mole -Value Open-Mole -Description "Open Mole cleanup tool"
 }
 
-## Final Line to set prompt
 Get-Theme
 
-# Generic font detection that defers to platform-specific functions
 function Test-FontInstalled {
     param ([string]$FontName)
     if ($IsWindows) {
@@ -968,7 +949,7 @@ function Search-YouTube {
         [string[]]$SearchTerms
     )
 
-    if (-not $SearchTerms -or $SearchTerms.Count -eq 0) {
+    if (-not $SearchTerms) {
         Write-Warning "No search terms provided. Usage: yt <search terms>"
         return
     }
@@ -982,7 +963,6 @@ function Search-YouTube {
     Start-Process $url
 }
 
-# Alias for backward compatibility
 Set-Alias -Name yt -Value Search-YouTube
 
 function Get-InstalledModuleFast {
@@ -1064,39 +1044,28 @@ function Update-Modules {
         [int]$ThrottleLimit = 20   # Control parallel execution limit
     )
 
-    # Initialize by getting all installed modules matching the name filter
     Write-Host ("Retrieving all installed modules ...") -ForegroundColor Green
     [array]$CurrentModules = Get-InstalledModuleFast -Name $Name -ErrorAction SilentlyContinue |
     Select-Object Name, Version |
     Sort-Object Name
 
-    # Exit if no modules are found
     if (-not $CurrentModules) {
         Write-Host ("No modules found.") -ForegroundColor Gray
         return
     }
 
-    # Display initial status
     Write-Host ("{0} modules found." -f $CurrentModules.Count) -ForegroundColor Gray
     Write-Host ("Updating installed modules to the latest {0} version ..." -f $(if ($AllowPrerelease) { "PreRelease" } else { "Production" })) -ForegroundColor Green
 
-    # Store original versions for comparison in summary
-    $script:OldVersions = @{}
-    foreach ($Module in $CurrentModules) {
-        $script:OldVersions[$Module.Name] = $Module.Version
-    }
-
-    # Capture WhatIf preference before parallel execution
-    $WhatIfEnabled = $WhatIfPreference.IsPresent
-
-    # Process updates in parallel for better performance
-    $CurrentModules | ForEach-Object -Parallel {
+    # Phase 1: Discovery (parallel, read-only) - find which modules need updating
+    Write-Host ("Checking for updates ...") -ForegroundColor Green
+    $DiscoveryResults = $CurrentModules | ForEach-Object -Parallel {
         $Module = $_
         $AllowPrerelease = $using:AllowPrerelease
-        $WhatIf = $using:WhatIfEnabled
+
+        Import-Module PowerShellGet -ErrorAction SilentlyContinue
 
         try {
-            # Find the latest available version
             $findParams = @{
                 Name            = $Module.Name
                 AllowPrerelease = $AllowPrerelease
@@ -1105,60 +1074,57 @@ function Update-Modules {
 
             $latest = Find-Module @findParams | Select-Object -First 1
 
-            # Update only if a newer version is available
-            if ($latest.Version -and $Module.Version -and ([version]$latest.Version -gt [version]$Module.Version)) {
-                $updateParams = @{
-                    Name            = $Module.Name
-                    AllowPrerelease = $AllowPrerelease
-                    AcceptLicense   = $true
-                    Force           = $true
-                    WhatIf          = $WhatIf
-                    ErrorAction     = 'Stop'
-                }
-
-                Update-Module @updateParams
-                Write-Host ("Updated {0} from version {1} to {2}" -f $Module.Name, $Module.Version, $latest.Version) -ForegroundColor Yellow
-
-                # Remove older versions to save disk space
-                if (-not $WhatIf) {
-                    $AllVersions = Get-InstalledModule -Name $Module.Name -AllVersions | Sort-Object PublishedDate -Descending
-                    foreach ($Version in $AllVersions | Select-Object -Skip 1) {
-                        try {
-                            Uninstall-Module -Name $Module.Name -RequiredVersion $Version.Version -Force -ErrorAction Stop
-                            Write-Host ("Uninstalled older version {0} of {1}" -f $Version.Version, $Module.Name) -ForegroundColor Gray
-                        } catch {
-                            Write-Warning ("Failed to uninstall version {0} of {1}: {2}" -f $Version.Version, $Module.Name, $_.Exception.Message)
-                        }
-                    }
-                }
-            } else {
-                Write-Host ("{0} is up to date (version {1})" -f $Module.Name, $Module.Version) -ForegroundColor Cyan
+            [PSCustomObject]@{
+                Name           = $Module.Name
+                CurrentVersion = $Module.Version
+                LatestVersion  = $latest.Version
+                NeedsUpdate    = ($latest.Version -and $Module.Version -and ([version]$latest.Version -gt [version]$Module.Version))
             }
         } catch {
             Write-Warning ("{0}: {1}" -f $Module.Name, $_.Exception.Message)
         }
     } -ThrottleLimit $ThrottleLimit
 
-    # Generate summary report of all updates
-    if (-not $WhatIfEnabled) {
-        $NewModules = Get-InstalledModule -Name $Name -ErrorAction SilentlyContinue |
-        Select-Object Name, Version |
-        Sort-Object Name
+    # Report modules that are already current
+    $DiscoveryResults | Where-Object { -not $_.NeedsUpdate } | ForEach-Object {
+        Write-Host ("{0} is up to date (version {1})" -f $_.Name, $_.CurrentVersion) -ForegroundColor Cyan
+    }
 
-        # Compare new versions with original versions
-        $UpdatedModules = $NewModules | Where-Object {
-            $script:OldVersions[$_.Name] -ne $_.Version
-        }
+    $ModulesToUpdate = @($DiscoveryResults | Where-Object { $_.NeedsUpdate })
 
-        # Display summary of changes
-        if ($UpdatedModules) {
-            Write-Host "`nUpdated modules:" -ForegroundColor Green
-            foreach ($Module in $UpdatedModules) {
-                Write-Host ("- {0}: {1} -> {2}" -f $Module.Name, $script:OldVersions[$Module.Name], $Module.Version) -ForegroundColor Green
+    if (-not $ModulesToUpdate) {
+        Write-Host ("`nNo modules need updating.") -ForegroundColor Gray
+        return
+    }
+
+    Write-Host ("`n{0} module(s) to update." -f $ModulesToUpdate.Count) -ForegroundColor Green
+
+    # Phase 2: Update + Cleanup (sequential) - eliminates race conditions
+    foreach ($Module in $ModulesToUpdate) {
+        if ($PSCmdlet.ShouldProcess($Module.Name, "Update from $($Module.CurrentVersion) to $($Module.LatestVersion)")) {
+            try {
+                Update-Module -Name $Module.Name -AllowPrerelease:$AllowPrerelease -Force -ErrorAction Stop
+                Write-Host ("Updated {0} from version {1} to {2}" -f $Module.Name, $Module.CurrentVersion, $Module.LatestVersion) -ForegroundColor Yellow
+
+                # Remove older versions to save disk space
+                $AllVersions = Get-InstalledModule -Name $Module.Name -AllVersions | Sort-Object PublishedDate -Descending
+                foreach ($Version in $AllVersions | Select-Object -Skip 1) {
+                    try {
+                        Uninstall-Module -Name $Module.Name -RequiredVersion $Version.Version -Force -ErrorAction Stop
+                        Write-Host ("Uninstalled older version {0} of {1}" -f $Version.Version, $Module.Name) -ForegroundColor Gray
+                    } catch {
+                        Write-Warning ("Failed to uninstall version {0} of {1}: {2}" -f $Version.Version, $Module.Name, $_.Exception.Message)
+                    }
+                }
+            } catch {
+                Write-Warning ("{0}: {1}" -f $Module.Name, $_.Exception.Message)
             }
-        } else {
-            Write-Host "`nNo modules were updated." -ForegroundColor Gray
         }
+    }
+
+    Write-Host "`nSummary:" -ForegroundColor Green
+    foreach ($Module in $ModulesToUpdate) {
+        Write-Host ("- {0}: {1} -> {2}" -f $Module.Name, $Module.CurrentVersion, $Module.LatestVersion) -ForegroundColor Green
     }
 }
 function Install-LatestModule {
@@ -1585,10 +1551,7 @@ function Connect-GraphSession {
         [System.GC]::Collect()
     }
 }
-# Create an alias for easier access
 Set-Alias -Name "stoic" -Value "Get-StoicQuote" -Description "Get a random stoic quote"
-# Optional: Display a quote when the profile loads (uncomment the line below)
-#Get-StoicQuote
 function Update-NpmPackage {
     <#
     .SYNOPSIS
@@ -1623,7 +1586,6 @@ function Update-NpmPackage {
     try {
         Write-Host "Updating npm package: $PackageName" -ForegroundColor Green
 
-        # Step 1: Get npm global directory
         Write-Host "Finding npm global directory..." -ForegroundColor Yellow
         $npmGlobalDir = npm root -g
         if ($LASTEXITCODE -ne 0) {
@@ -1631,7 +1593,6 @@ function Update-NpmPackage {
         }
         Write-Host "Global directory: $npmGlobalDir" -ForegroundColor Cyan
 
-        # Step 2: Check if package is currently installed and get its path
         Write-Host "Checking current installation..." -ForegroundColor Yellow
         $packagePath = Join-Path $npmGlobalDir $PackageName
         $packageExists = Test-Path $packagePath
@@ -1642,11 +1603,9 @@ function Update-NpmPackage {
             Write-Host "Package not currently installed globally" -ForegroundColor Yellow
         }
 
-        # Step 3: Force uninstall the package
         Write-Host "Force removing existing package via npm..." -ForegroundColor Yellow
         npm uninstall -g $PackageName --force 2>$null
 
-        # Step 4: Manually remove the directory if it still exists
         if (Test-Path $packagePath) {
             Write-Host "Package directory still exists, manually removing..." -ForegroundColor Yellow
 
@@ -1669,14 +1628,11 @@ function Update-NpmPackage {
             }
         }
 
-        # Step 5: Clear npm cache
         Write-Host "Clearing npm cache..." -ForegroundColor Yellow
         npm cache clean --force
 
-        # Step 6: Wait a moment for filesystem to settle
         Start-Sleep -Seconds 2
 
-        # Step 7: Install the package fresh
         Write-Host "Installing package..." -ForegroundColor Yellow
         if ($Force) {
             $result = npm install -g $PackageName --force 2>&1
@@ -1970,8 +1926,6 @@ function Get-SystemInfo {
             $info.PSReadLineHistory = if (Test-Path $psReadLineHistory) { "OneDrive" } else { "Local" }
 
         } elseif ($IsMacOS) {
-            # macOS Information
-            # OS Information
             $osInfo = sw_vers
             $info.OS = "$($osInfo | Where-Object { $_ -match 'ProductName' } | ForEach-Object { $_ -replace 'ProductName:\s*', '' }) $($osInfo | Where-Object { $_ -match 'ProductVersion' } | ForEach-Object { $_ -replace 'ProductVersion:\s*', '' })"
 
@@ -2113,7 +2067,6 @@ function Get-SystemInfo {
             $psReadLineHistory = "$oneDrivePath/PSReadLine/PSReadLineHistory.txt"
             $info.PSReadLineHistory = if (Test-Path $psReadLineHistory) { "OneDrive" } else { "Local" }
 
-
         } else {
             # Linux or other Unix-like systems
             $info.OS = "Linux/Unix (Generic)"
@@ -2207,20 +2160,17 @@ function Show-SystemNeofetch {
     # Get system information
     $sysInfo = Get-SystemInfo
 
-    # Determine whether to use Spectre image or ASCII art
     $useSpectreImage = $false
     if ($global:SpectreAvailable -and (Test-Path $ProfileImage) -and -not $NoColor) {
         $useSpectreImage = $true
     }
 
-    # Get ASCII art (fallback)
     $asciiLines = if ($CustomAscii -and (Test-Path $CustomAscii)) {
         Get-Content $CustomAscii
     } else {
         Get-DefaultAsciiArt
     }
 
-    # Build info lines
     $infoLines = @()
 
     # Adjust width based on whether we're using image or ASCII art
@@ -2660,11 +2610,7 @@ function Show-PriceSnapshot {
     Write-Host "  Updated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor DarkGray
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`n" -ForegroundColor DarkGray
 }
-# Display neofetch on startup (respects light mode and skip flags)
-$isVSCode = ($env:TERM_PROGRAM -eq 'vscode')
-if (-not $script:LightMode -and -not $script:SkipNeofetch -and -not $isVSCode) {
+if (-not $script:LightMode -and -not $script:SkipNeofetch -and $env:TERM_PROGRAM -ne 'vscode') {
     Clear-Host
     Show-SystemNeofetch
 }
-
-
