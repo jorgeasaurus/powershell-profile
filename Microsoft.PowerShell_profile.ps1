@@ -117,6 +117,56 @@ function Initialize-ProfileModules {
         [switch]$Install
     )
 
+    function Repair-TerminalIconsThemeCache {
+        [CmdletBinding()]
+        param()
+
+        try {
+            $basePath = $null
+            if ($IsLinux -or $IsMacOS) {
+                $basePath = if ($env:XDG_CONFIG_HOME) { $env:XDG_CONFIG_HOME } else { [IO.Path]::Combine($HOME, '.local', 'share') }
+            } else {
+                $basePath = if ($env:APPDATA) { $env:APPDATA } else { [Environment]::GetFolderPath('ApplicationData') }
+            }
+
+            if (-not $basePath) {
+                return
+            }
+
+            $themePath = [IO.Path]::Combine($basePath, 'powershell', 'Community', 'Terminal-Icons')
+            if (-not (Test-Path -Path $themePath -ErrorAction SilentlyContinue)) {
+                return
+            }
+
+            $stamp = Get-Date -Format 'yyyyMMddHHmmss'
+            Get-ChildItem -Path $themePath -Filter '*_*.xml' -File -ErrorAction SilentlyContinue | ForEach-Object {
+                $isInvalid = $false
+                $themeData = $null
+
+                try {
+                    $themeData = Import-Clixml -Path $_.FullName -ErrorAction Stop
+                } catch {
+                    $isInvalid = $true
+                }
+
+                if (-not $isInvalid) {
+                    $hasName = $themeData -is [hashtable] -and $themeData.ContainsKey('Name') -and -not [string]::IsNullOrWhiteSpace([string]$themeData['Name'])
+                    $hasTypes = $themeData -is [hashtable] -and $themeData.ContainsKey('Types')
+                    if (-not $hasName -or -not $hasTypes) {
+                        $isInvalid = $true
+                    }
+                }
+
+                if ($isInvalid) {
+                    $backupPath = Join-Path -Path $_.DirectoryName -ChildPath ("$($_.BaseName).invalid.$stamp.xml")
+                    Move-Item -Path $_.FullName -Destination $backupPath -Force -ErrorAction SilentlyContinue
+                }
+            }
+        } catch {
+            # Best-effort repair only; Terminal-Icons import handles failures separately.
+        }
+    }
+
     $requiredModules = @(
         @{ Name = 'Terminal-Icons'; Required = $true; MinVersion = $null }
         @{ Name = 'PSpreworkout'; Required = $true; MinVersion = $null }
@@ -159,11 +209,30 @@ function Initialize-ProfileModules {
         # Import the module
         try {
             Import-Module -Name $module.Name -ErrorAction Stop
-            if ($module.Name -eq 'PwshSpectreConsole') {
-                $global:SpectreAvailable = $true
-            }
         } catch {
-            Write-Warning "Failed to import $($module.Name): $_"
+            if ($module.Name -eq 'Terminal-Icons') {
+                # Repair malformed cached themes from older/corrupt exports, then retry import.
+                Repair-TerminalIconsThemeCache
+
+                # Terminal-Icons can emit non-terminating index errors on some environments when
+                # the caller's ErrorActionPreference is Stop. Retry with a local relaxed preference.
+                $imported = $false
+                & {
+                    $ErrorActionPreference = 'Continue'
+                    Import-Module -Name 'Terminal-Icons' -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+                }
+                $imported = $null -ne (Get-Module -Name 'Terminal-Icons' -ErrorAction SilentlyContinue)
+
+                if (-not $imported) {
+                    Write-Warning "Failed to import Terminal-Icons. Continuing without file/folder icons."
+                }
+            } else {
+                Write-Warning "Failed to import $($module.Name): $_"
+            }
+        }
+
+        if ($module.Name -eq 'PwshSpectreConsole' -and (Get-Module -Name 'PwshSpectreConsole' -ErrorAction SilentlyContinue)) {
+            $global:SpectreAvailable = $true
         }
     }
 
