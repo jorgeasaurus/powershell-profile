@@ -1,535 +1,124 @@
-# 🎨 PowerShell Profile
+# PowerShell Profile
 
-A cross-platform, feature-rich PowerShell profile that brings a beautiful terminal experience to Windows and macOS with Oh My Posh theming, system information display, auto-updates, and powerful utility functions.
+Cross-platform PowerShell profile for Windows and macOS. Startup stays focused on prompt setup, Terminal-Icons, PSReadLine preferences, update checks, native completions, and a small set of shell helpers.
 
-[![PowerShell](https://img.shields.io/badge/PowerShell-7.0+-blue.svg)](https://github.com/PowerShell/PowerShell)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-lightgrey.svg)](https://github.com/jorgeasaurus/powershell-profile)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+## Install
 
-## 🆕 Recent Improvements (January 2026)
-
-### Performance & Security
-
-- ✅ **90-95% faster startup** - Smart caching system for system information
-- ✅ **Secure module management** - No auto-install on startup, requires explicit user consent
-- ✅ **Eliminated redundant update checks** - Single consolidated update gate
-- ✅ **Fixed critical bugs** - 5 critical bugs fixed including broken functions and syntax errors
-- ✅ **Code cleanup** - ~100 lines of dead code removed (duplicates, unused functions)
-
-### Key Changes
-
-- **`Get-SystemInfo` now caches** static info (OS, CPU, Model) for 60 minutes
-- **`Initialize-ProfileModules`** - New consolidated function for module management
-- **No more `-SkipPublisherCheck`** auto-installs on every shell launch (security fix)
-- **Fixed functions**: `ll`, `trash()`, Remove-Item syntax, conditional spacing
-- **Removed duplicates**: PSReadLine imports, PredictionSource configs, `k9` function
-
-## ✨ Features
-
-### 🎯 Core Features
-- **Cross-platform** - Works on Windows and macOS
-- **Auto-updating** - Automatically checks for and installs updates from GitHub
-- **Oh My Posh theming** - Beautiful Powerlevel10k-inspired prompt
-- **Smart caching** - System info cached for 90-95% faster startup
-- **Secure module management** - No auto-install on startup, explicit user control
-- **System neofetch** - Displays system information on startup with ASCII art
-- **Price tracking** - Live cryptocurrency (BTC, ETH) and stock price display
-
-### 🚀 Utility Functions
-- **Git Integration**: Quick status, commits, and repository management (`gs`, `ga`, `gc`, `gp`, `gcl`, `gcom`, `lazyg`)
-- **System Tools**: `reload-profile`, `uptime`, `admin` (Windows), `Get-PubIP`
-- **Clipboard**: `cpy` (copy), `pst` (paste)
-- **PowerShell Updates**: `Update-PowerShell` with automatic version checking
-- **Module Management**: `Initialize-ProfileModules`, `Update-Modules`, `Install-LatestModule`
-- **Development**: `Update-ClaudeCode`, `Update-NpmPackage`, `Search-YouTube`
-- **Microsoft Graph**: `Connect-GraphSession`, `graph`, `Get-CredentialsFromKeyVault`
-- **Utilities**: `Show-Tree`, `Get-StoicQuote`, `Get-Theme`
-
-### 📊 Extra Features
-- **Live Price Display**: BTC, ETH, and customizable stock ticker in neofetch
-- **Color-coded changes**: Green ▲ for gains, Red ▼ for losses
-- **Real-time APIs**: CoinGecko for crypto, Yahoo Finance for stocks
-
-## ⚡ Installation
-
-### One-Line Install (Recommended)
-
-Run this command in an **elevated** PowerShell window:
+Run in an elevated PowerShell session on Windows:
 
 ```powershell
 irm "https://github.com/jorgeasaurus/powershell-profile/raw/main/setup.ps1" | iex
 ```
 
-This will:
-1. Install Oh My Posh
-2. Download and install Nerd Fonts
-3. Set up the PowerShell profile
-4. Prompt you to install required modules on first run
+Manual install:
 
-### Manual Installation
-
-1. Clone this repository:
 ```powershell
 git clone https://github.com/jorgeasaurus/powershell-profile.git
 cd powershell-profile
-```
-
-2. Run the setup script:
-```powershell
 .\setup.ps1
 ```
 
-3. Install a Nerd Font (see below)
+The installer sets up PowerShell 7 when needed, Oh My Posh, CaskaydiaCove Nerd Font, Terminal-Icons, the profile file, and Windows Terminal defaults on Windows.
 
-## 🛠️ Font Installation
+## Configuration
 
-The profile requires a Nerd Font to display icons correctly.
+Edit these values in `Microsoft.PowerShell_profile.ps1`:
 
-### Option 1: Automatic Font Download
-The setup script downloads `cove.zip` containing the Caskaydia Cove Nerd Font:
-1. Extract `cove.zip`
-2. Install the fonts (double-click each font file)
-
-### Option 2: Oh My Posh Font Installer
 ```powershell
-oh-my-posh font install
+$updateInterval = 7
+$OhMyPoshTheme = "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/quick-term.omp.json"
 ```
 
-Select a font using arrow keys and press Enter. Popular choices:
-- **CascadiaCode** - Microsoft's coding font
-- **FiraCode** - Popular with ligature support
-- **JetBrainsMono** - Clean and modern
-- **Meslo** - Classic terminal font
-
-### Option 3: Manual Download
-Download from [Nerd Fonts](https://www.nerdfonts.com/font-downloads)
-
-## 🎨 Profile Output
-
-When you open a new PowerShell session, you'll see (this is my version, yours will show your specific info):
-
-![alt text](image.png)
-
-## 📝 Configuration
-
-### Customize Your Stock Ticker
-
-Edit line 51 in `Microsoft.PowerShell_profile.ps1`:
+Set light mode for scripts or constrained shells:
 
 ```powershell
-$UserStockSymbol = "AAPL"  # Change to your preferred stock (TSLA, MSFT, GOOGL, etc.)
+$env:PROFILE_LIGHT = "1"
 ```
 
-### Update Interval
+Light mode skips startup update checks and module imports.
 
-Change how often the profile checks for updates (line 7):
+## Commands
+
+Profile management:
 
 ```powershell
-$updateInterval = 7  # Days between update checks (-1 to always check)
+Update-Profile
+Update-PowerShell
+reload-profile
+ep
 ```
 
-### Theme Customization
-
-Change the Oh My Posh theme (line 48):
+Module maintenance:
 
 ```powershell
-$OhMyPoshTheme = "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/powerlevel10k_rainbow.omp.json"
-```
-
-Browse themes at: https://ohmyposh.dev/docs/themes
-
-## 🔧 Usage
-
-### Module Management
-
-The profile uses a secure module management system that requires explicit user consent for installations.
-
-```powershell
-# First-time setup: Install required modules
-Initialize-ProfileModules -Install
-
-# Import modules (done automatically on profile load)
-Initialize-ProfileModules
-
-# Update all installed modules
 Update-Modules
-
-# Update specific module
 Update-Modules -Name Pester
-
-# Reinstall module with latest version (removes all old versions)
-Install-LatestModule -Name Pester
-
-# Reinstall all modules in user directory
-ls ~/.local/share/powershell/Modules | Install-LatestModule -Force
+Update-Modules -AllowPrerelease -WhatIf
 ```
 
-**Required Modules:**
+`Update-Modules` checks installed modules, reports current/latest versions, supports prerelease checks, and removes older side-by-side versions after successful updates.
 
-- `Terminal-Icons` - File icons in directory listings
-- `PSpreworkout` - Profile utility functions
-- `PwshSpectreConsole` - Enhanced visuals (PowerShell 7+ only, optional)
-
-### System Information Caching
-
-The profile now includes intelligent caching for faster startup:
+Shell helpers:
 
 ```powershell
-# Get system info (uses cache by default)
-Get-SystemInfo
-
-# Force fresh collection, bypass cache
-Get-SystemInfo -NoCache
-
-# Custom cache duration (2 hours)
-Get-SystemInfo -CacheMinutes 120
-```
-
-**What's Cached:**
-
-- Static info: OS, CPU, Model, Memory (cached for 60 minutes)
-- Dynamic info: Uptime, Disk, Battery (always refreshed)
-
-**Performance:** 90-95% faster startup (3-5s → 200ms on Windows, 2-3s → 150ms on macOS)
-
-### Price Tracking
-
-```powershell
-# Show live price snapshot
-Show-PriceSnapshot
-
-# Get crypto prices
-Get-CryptoPrice -Symbol BTC, ETH, SOL
-
-# Get stock prices
-Get-StockPrice -Symbol AAPL, TSLA, MSFT
-
-# Change default stock
-Show-PriceSnapshot -StockSymbol TSLA
-```
-
-### System Information
-
-```powershell
-# Show neofetch display
-Show-SystemNeofetch
-
-# Get system info object
-Get-SystemInfo
-
-# Show uptime
+ll
 uptime
-
-# Get public IP address
 Get-PubIP
-```
-
-### Git Shortcuts
-
-```powershell
-# Git status
-gs
-
-# Git add all
-ga
-
-# Git commit
-gc "commit message"
-
-# Git push
-gp
-
-# Git clone
-gcl https://github.com/user/repo
-
-# Git add all and commit
-gcom "commit message"
-
-# Lazy git (add all, commit, push)
-lazyg "commit message"
-```
-
-### Clipboard Utilities
-
-```powershell
-# Copy to clipboard
-cpy "text to copy"
-
-# Paste from clipboard
+cpy "text"
 pst
 ```
 
-### Development Tools
+Stock lookup:
 
 ```powershell
-# Search YouTube
-Search-YouTube "search query"
-
-# Update Claude Code
-Update-ClaudeCode
-
-# Update NPM package
-Update-NpmPackage -PackageName "package-name"
-
-# Display directory tree
-Show-Tree
-
-# Get stoic quote
-Get-StoicQuote
+Get-StockPrice
+Get-StockPrice -Symbol MSFT
 ```
 
-## 🎯 Key Functions
+`Get-StockPrice` defaults to `SPCX` and only calls the finance API when you run it.
 
-### Profile Management
-
-- `Edit-Profile` - Create user-specific profile (won't be overwritten)
-- `Update-Profile` - Manually check for profile updates
-- `reload-profile` - Reload the current profile
-- `Initialize-ProfileModules` - Initialize/install required modules
-
-### PowerShell & Module Management
-
-- `Update-PowerShell` - Check and install latest PowerShell version
-- `Update-Modules` - Update installed modules
-- `Install-LatestModule` - Install/reinstall latest version of a module
-- `Get-InstalledModuleFast` - Quickly list installed modules
-
-### System Utilities
-
-- `Get-SystemInfo` - Get system information (with smart caching)
-- `Show-SystemNeofetch` - Display neofetch-style system info with ASCII art
-- `admin` - Open new PowerShell window as administrator (Windows only)
-- `uptime` - Show system uptime
-- `Get-PubIP` - Get your public IP address
-
-### File Operations
-
-- `ll` - List all files including hidden files in table format
-
-### Git Functions
-
-- `gs` - Git status
-- `ga` - Git add all
-- `gc` - Git commit with message
-- `gp` - Git push
-- `gcl` - Git clone
-- `gcom` - Git add all and commit
-- `lazyg` - Git add all, commit, and push
-
-### Clipboard & Text
-
-- `cpy` - Copy text to clipboard
-- `pst` - Paste text from clipboard
-
-### Price Tracking
-
-- `Get-CryptoPrice` - Get cryptocurrency prices
-- `Get-StockPrice` - Get stock prices
-- `Show-PriceSnapshot` - Display BTC, ETH, and stock prices
-
-### Development Tools
-
-- `Update-ClaudeCode` - Update Claude Code CLI
-- `Update-NpmPackage` - Update NPM packages
-- `Search-YouTube` - Search YouTube from terminal
-
-### Utilities
-
-- `Show-Tree` - Display directory tree structure
-- `Get-StoicQuote` - Get a random stoic quote
-- `Get-Theme` - Get Oh My Posh theme configuration
-- `Test-FontInstalled` - Check if a Nerd Font is installed
-- `Get-CredentialsFromKeyVault` - Get credentials from Azure Key Vault
-- `Connect-GraphSession` - Connect to Microsoft Graph
-- `graph` - Microsoft Graph shortcut
-
-### Cleanup
-
-- `Clear-Cache` - Clear system caches (cross-platform wrapper)
-- `Clear-WindowsCache` - Clear Windows temp files, prefetch, etc. (Windows only)
-- `Clear-MacCache` - Clear macOS caches (macOS only)
-
-## 🔄 Auto-Update System
-
-The profile automatically checks for updates based on `$updateInterval`:
-
-1. **Checks GitHub** for the latest profile version
-2. **Compares hashes** to detect changes
-3. **Downloads** and installs if update available
-4. **Preserves** your custom `profile.ps1` settings
-
-To disable auto-updates, set debug mode:
-```powershell
-$debug = $true  # Line 4 in profile
-```
-
-## 🎨 Customization
-
-### IMPORTANT: Do Not Modify Main Profile
-
-**Do not edit `Microsoft.PowerShell_profile.ps1`** - it's automatically updated from GitHub and changes will be overwritten.
-
-### Create Personal Profile
-
-Run `Edit-Profile` to create `profile.ps1` in your PowerShell directory for personal customizations:
+Git shortcuts:
 
 ```powershell
-Edit-Profile
+gs
+ga
+gc "message"
+gp
+gcl https://github.com/user/repo
+gcom "message"
+lazyg "message"
 ```
 
-This file is loaded after the main profile and won't be overwritten by updates.
-
-### Custom Aliases
-
-Add to your `profile.ps1`:
+Windows-only helpers:
 
 ```powershell
-# Custom aliases
-Set-Alias -Name vim -Value nvim
-Set-Alias -Name ll -Value Get-ChildItem
-
-# Custom functions
-function myfunction {
-    Write-Host "Hello from my custom function!"
-}
+admin
+sys
+winutil
+Search-RegistryUninstallKey -SearchFor "PowerShell"
 ```
 
-## 🧪 Development
+Interactive shell behavior:
 
-### Testing Profile Changes
+- PSReadLine colors, history de-duplication, key handlers, prediction source, and secret filtering stay enabled when PSReadLine is available.
+- Native argument completions are registered for `git`, `npm`, `deno`, and `dotnet` when applicable.
 
-Set debug mode to prevent auto-updates during development:
+## Development
+
+Parse scripts without loading the profile:
 
 ```powershell
-# Edit line 4
-$debug = $true
+pwsh -NoProfile -Command '$files = "Microsoft.PowerShell_profile.ps1","setup.ps1"; foreach ($file in $files) { $tokens = $null; $errors = $null; [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null; if ($errors) { $errors; exit 1 } }'
 ```
 
-Test the profile without loading it:
+Run PSScriptAnalyzer when available:
 
 ```powershell
-pwsh -noprofile -File ./Microsoft.PowerShell_profile.ps1
+pwsh -NoProfile -Command "Invoke-ScriptAnalyzer -Path . -Recurse"
 ```
 
-### Copy Profile Locally
+## Notes
 
-```powershell
-.\setprofile.ps1
-```
-
-Reload profile in current session:
-
-```powershell
-. $PROFILE
-```
-
-## 📋 Requirements
-
-- **PowerShell 7.0+** (PowerShell Core)
-- **Windows 10/11** or **macOS 10.15+**
-- **Internet connection** for auto-updates and price tracking
-- **Nerd Font** for icon display
-
-### Optional Dependencies
-- **Git** - For git shortcuts and repository management
-- **winget** (Windows) or **Homebrew** (macOS) - For PowerShell updates
-
-## 🌐 API Services Used
-
-- **CoinGecko API** - Free cryptocurrency price data
-- **Yahoo Finance API** - Free stock price data
-- **GitHub API** - PowerShell version checking
-
-All APIs are free and require no authentication.
-
-## 🔍 Architecture
-
-### Auto-Update Flow
-
-```text
-Start PowerShell
-    ↓
-Check if update due ($updateInterval)
-    ↓
-Run both Update-Profile AND Update-PowerShell
-    ↓
-Compare file hashes
-    ↓
-Download if different
-    ↓
-Save timestamp (single write)
-```
-
-### Smart Caching System
-
-```text
-Get-SystemInfo called
-    ↓
-Check cache file exists and is valid (<60 min old)
-    ↓
-If valid: Load from cache + refresh dynamic fields (uptime, disk, battery)
-    ↓
-If invalid/missing: Full collection + save to cache
-    ↓
-Return system info (200ms cached vs 3-5s fresh)
-```
-
-### Platform Branching
-
-Uses `$IsWindows` / `$IsMacOS` automatic variables for platform-specific code:
-
-- Windows: `Invoke-WindowsPowerShellUpgrade`, `Clear-WindowsCache`, `Get-ComputerInfo`
-- macOS: `Invoke-MacPowerShellUpgrade`, `Clear-MacCache`, `system_profiler`
-- Cross-platform: `Clear-Cache`, `Update-PowerShell`, `Get-SystemInfo` (wrappers)
-
-### Secure Module Management
-
-```text
-Profile loads
-    ↓
-Initialize-ProfileModules (import only)
-    ↓
-Check if modules available
-    ↓
-If missing: Warn user, provide install command
-    ↓
-If present: Import modules
-    ↓
-User can run: Initialize-ProfileModules -Install (explicit consent)
-```
-
-## 🤝 Contributing
-
-Contributions welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Test thoroughly on both Windows and macOS if possible
-4. Follow PowerShell best practices:
-   - Use approved verbs (`Get-`, `Set-`, `Update-`, etc.)
-   - Include comment-based help
-   - Use `[CmdletBinding()]` for advanced functions
-   - Handle errors with try/catch
-
-## 📄 License
-
-MIT License - Feel free to use and modify!
-
-## 🙏 Credits
-
-- **Oh My Posh** - [JanDeDobbeleer/oh-my-posh](https://github.com/JanDeDobbeleer/oh-my-posh)
-- **Terminal-Icons** - [devblackops/Terminal-Icons](https://github.com/devblackops/Terminal-Icons)
-- **Nerd Fonts** - [ryanoasis/nerd-fonts](https://github.com/ryanoasis/nerd-fonts)
-- **PowerShell** - [PowerShell/PowerShell](https://github.com/PowerShell/PowerShell)
-
-## 🐛 Issues & Support
-
-Report issues at: https://github.com/jorgeasaurus/powershell-profile/issues
-
-For questions about:
-- **Oh My Posh** - See [Oh My Posh Docs](https://ohmyposh.dev)
-- **PowerShell** - See [PowerShell Docs](https://docs.microsoft.com/powershell)
-
----
-
-**Enjoy your beautiful PowerShell experience!** 🚀✨
+- `Microsoft.PowerShell_profile.ps1` is the source profile copied to `$PROFILE`.
+- Personal aliases and machine-specific functions belong in a separate local profile.
+- Startup should stay free of optional app installers, automatic finance API calls, screenshots, and workstation bootstrap logic.

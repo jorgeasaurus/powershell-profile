@@ -10,12 +10,9 @@
     - Installs PowerShell profile from GitHub
     - Installs Oh My Posh prompt theme
     - Installs CaskaydiaCove Nerd Font
-    - Installs PowerShell modules (Terminal-Icons, PSPreworkout, PwshSpectreConsole)
-    - Windows only: PsTools, CMTrace, Windows Terminal configuration
+    - Installs Terminal-Icons
+    - Windows only: Windows Terminal configuration
     - macOS: Homebrew-based installations
-
-.PARAMETER SkipOptional
-    Skip optional components (PsTools, CMTrace).
 
 .PARAMETER NoElevate
     Don't attempt to self-elevate on Windows (will fail if not admin).
@@ -26,9 +23,6 @@
 .EXAMPLE
     .\setup.ps1 -Verbose
 
-.EXAMPLE
-    .\setup.ps1 -SkipOptional
-
 .NOTES
     Author: jorgeasaurus
     Repository: https://github.com/jorgeasaurus/powershell-profile
@@ -37,7 +31,6 @@
 
 [CmdletBinding()]
 param(
-    [switch]$SkipOptional,
     [switch]$NoElevate
 )
 
@@ -154,8 +147,9 @@ if (($IsWindows -or $PSVersionTable.PSEdition -ne 'Core') -and $PSVersionTable.P
 
                     try {
                         Write-Host "Trying Microsoft's official PowerShell installer..." -ForegroundColor Yellow
-                        $installScript = Invoke-RestMethod -Uri 'https://aka.ms/install-powershell.ps1' -UseBasicParsing
-                        Invoke-Expression "& { $installScript } -UseMSI -Quiet"
+                        $installScriptPath = Join-Path $env:TEMP 'install-powershell.ps1'
+                        Invoke-WebRequest -Uri 'https://aka.ms/install-powershell.ps1' -OutFile $installScriptPath -UseBasicParsing
+                        powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installScriptPath -UseMSI -Quiet
 
                         # Refresh PATH
                         $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User')
@@ -243,92 +237,6 @@ if ($IsWindows) {
 }
 
 # ============================================================================
-# WinGet (Windows Only)
-# ============================================================================
-
-if ($IsWindows) {
-    Write-Verbose "Ensuring WinGet client is available..."
-    try {
-        if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
-            Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery | Out-Null
-        }
-
-        Import-Module Microsoft.WinGet.Client -Force -ErrorAction Stop
-
-        $repairCmd = Get-Command Repair-WinGetPackageManager -ErrorAction SilentlyContinue
-        if ($repairCmd) {
-            Repair-WinGetPackageManager -AllUsers | Out-Null
-            Repair-WinGetPackageManager | Out-Null
-            Write-Host "[OK] WinGet client repaired/installed" -ForegroundColor Green
-        } else {
-            Write-Verbose "Repair-WinGetPackageManager not available even after module import"
-        }
-    } catch {
-        Write-Verbose "WinGet client setup skipped: $_"
-    }
-
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        Write-Verbose "Installing Git..."
-        try {
-            winget install git.git --source winget --accept-package-agreements --accept-source-agreements --silent --disable-interactivity 2>&1 | Out-Null
-
-            # Refresh PATH
-            $env:PATH = [Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH', 'User')
-
-            if (Get-Command git -ErrorAction SilentlyContinue) {
-                Write-Host "[OK] Git installed" -ForegroundColor Green
-            } else {
-                Write-Verbose "Git installation completed but command not immediately available. May require shell restart."
-            }
-        } catch {
-            Write-Verbose "Git installation skipped: $_"
-        }
-    }
-
-    $currentUser = [Environment]::UserName
-    if ($currentUser -eq 'WDAGUtilityAccount') {
-        Write-Host "Detected Windows Defender Application Guard environment" -ForegroundColor Cyan
-
-        Write-Verbose "Setting Windows region to United States..."
-        try {
-            Set-WinHomeLocation -GeoId 244 -ErrorAction Stop  # 244 = United States
-            Write-Host "[OK] Region set to United States" -ForegroundColor Green
-        } catch {
-            Write-Verbose "Failed to set region: $_"
-        }
-
-        Write-Verbose "Installing Microsoft Store for Sandbox/WDAG..."
-
-        try {
-            $desktopPath = [Environment]::GetFolderPath('Desktop')
-            $repoPath = Join-Path $desktopPath 'Sandbox-Add-MicrosoftStore'
-
-            if (Get-Command git -ErrorAction SilentlyContinue) {
-                Write-Verbose "Cloning Sandbox-Add-MicrosoftStore repository..."
-                git clone https://github.com/jorgeasaurus/Sandbox-Add-MicrosoftStore $repoPath 2>&1 | Out-Null
-
-                if (Test-Path $repoPath) {
-                    $addStoreScript = Join-Path $repoPath 'Add-Microsoft-Store.ps1'
-                    if (Test-Path $addStoreScript) {
-                        Write-Host "Installing Microsoft Store..." -ForegroundColor Yellow
-                        pwsh -NoProfile -ExecutionPolicy Bypass -File $addStoreScript
-                        Write-Host "[OK] Microsoft Store installation initiated" -ForegroundColor Green
-                    } else {
-                        Write-Verbose "Add-Microsoft-Store.ps1 not found in repository"
-                    }
-                } else {
-                    Write-Verbose "Failed to clone Sandbox-Add-MicrosoftStore repository"
-                }
-            } else {
-                Write-Verbose "Git not available for cloning Microsoft Store installer. Install Git first."
-            }
-        } catch {
-            Write-Verbose "Microsoft Store installation for WDAG skipped: $_"
-        }
-    }
-}
-
-# ============================================================================
 # Install Profile
 # ============================================================================
 
@@ -409,50 +317,6 @@ if (-not (Get-Module -ListAvailable -Name Terminal-Icons)) {
     Write-Verbose "Installing Terminal-Icons..."
     Install-Module -Name Terminal-Icons -Scope CurrentUser -Force -AllowClobber -Repository PSGallery
     Write-Host "[OK] Terminal-Icons installed" -ForegroundColor Green
-}
-
-# ============================================================================
-# Windows-Specific Modules
-# ============================================================================
-
-if ($IsWindows) {
-    if (-not (Get-Module -ListAvailable -Name PSPreworkout)) {
-        Write-Verbose "Installing PSPreworkout..."
-        Install-Module PSPreworkout -Force -AllowClobber -Scope CurrentUser -Repository PSGallery
-        Write-Host "[OK] PSPreworkout installed" -ForegroundColor Green
-    }
-
-    if (-not (Get-Module -ListAvailable -Name PwshSpectreConsole)) {
-        Write-Verbose "Installing PwshSpectreConsole..."
-        $OutputEncoding = [console]::InputEncoding = [console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
-        Install-Module -Name PwshSpectreConsole -Scope CurrentUser -Force -SkipPublisherCheck -Repository PSGallery
-        Write-Host "[OK] PwshSpectreConsole installed" -ForegroundColor Green
-    }
-
-    if (-not $SkipOptional) {
-        Write-Verbose "Installing Sysinternals PsTools..."
-        try {
-            winget install -e --id Microsoft.Sysinternals.PsTools --accept-package-agreements --accept-source-agreements --silent --disable-interactivity 2>&1 | Out-Null
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "[OK] PsTools installed" -ForegroundColor Green
-            }
-        } catch {
-            Write-Verbose "PsTools installation skipped (optional)"
-        }
-    }
-
-    if (-not $SkipOptional) {
-        Write-Verbose "Installing CMTrace symlink..."
-        try {
-            $cmTraceScript = Invoke-RestMethod 'https://raw.githubusercontent.com/jorgeasaurus/cmtrace/refs/heads/main/New-CMTraceSymLink.ps1' -ErrorAction Stop
-            if ($cmTraceScript) {
-                Invoke-Expression $cmTraceScript
-                Write-Host "[OK] CMTrace symlink configured" -ForegroundColor Green
-            }
-        } catch {
-            Write-Verbose "CMTrace installation skipped (optional)"
-        }
-    }
 }
 
 # ============================================================================

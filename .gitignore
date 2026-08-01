@@ -11,3 +11,6 @@ ENTERPRISE_REVIEW.md
 CODE_REVIEW_Profile.md
 Microsoft.PowerShell_profile.ps1.*
 setup.ps1.*
+AGENTS.md
+tasks/todo.md
+.gitignore
