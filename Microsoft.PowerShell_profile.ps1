@@ -351,7 +351,8 @@ function Convert-MkvToMp4 {
         Converts an MKV video to an MP4 using ffmpeg.
 
     .DESCRIPTION
-        Creates an H.264/AAC MP4 that is broadly compatible with media players.
+        Creates an H.264 MP4 with stereo AAC audio for broad media-player compatibility.
+        The source must contain audio, and the completed MP4 is verified to contain audio.
         By default, the MP4 is created beside the source MKV with the same base name.
 
     .PARAMETER Path
@@ -393,30 +394,44 @@ function Convert-MkvToMp4 {
             throw 'ffmpeg was not found on PATH. Install ffmpeg and try again.'
         }
 
+        $ffprobe = Get-Command -Name ffprobe -CommandType Application -ErrorAction SilentlyContinue
+        if (-not $ffprobe) {
+            throw 'ffprobe was not found on PATH. Install the full ffmpeg package and try again.'
+        }
+
         $inputFile = Get-Item -LiteralPath $Path -ErrorAction Stop
-        if (-not $OutputPath) {
-            $OutputPath = [IO.Path]::ChangeExtension($inputFile.FullName, 'mp4')
+        $destinationPath = if ($OutputPath) {
+            $OutputPath
+        } else {
+            [IO.Path]::ChangeExtension($inputFile.FullName, 'mp4')
         }
 
-        if ([IO.Path]::GetExtension($OutputPath) -ine '.mp4') {
-            throw "OutputPath must have an .mp4 extension: $OutputPath"
+        if ([IO.Path]::GetExtension($destinationPath) -ine '.mp4') {
+            throw "OutputPath must have an .mp4 extension: $destinationPath"
         }
 
-        if ((Test-Path -LiteralPath $OutputPath) -and -not $Force) {
-            throw "Output file already exists: $OutputPath. Use -Force to overwrite it."
+        if ((Test-Path -LiteralPath $destinationPath) -and -not $Force) {
+            throw "Output file already exists: $destinationPath. Use -Force to overwrite it."
         }
 
-        if ($PSCmdlet.ShouldProcess($OutputPath, "Convert '$($inputFile.Name)' to MP4")) {
+        $sourceAudioStreams = @(& $ffprobe.Source -v error -select_streams a -show_entries stream=index -of csv=p=0 $inputFile.FullName)
+        if ($LASTEXITCODE -ne 0 -or $sourceAudioStreams.Count -eq 0) {
+            throw "Input file does not contain a readable audio stream: $($inputFile.FullName)"
+        }
+
+        if ($PSCmdlet.ShouldProcess($destinationPath, "Convert '$($inputFile.Name)' to MP4")) {
             $ffmpegArguments = @(
                 '-hide_banner'
                 $(if ($Force) { '-y' } else { '-n' })
                 '-i', $inputFile.FullName
                 '-map', '0:v:0'
-                '-map', '0:a?'
+                '-map', '0:a'
                 '-c:v', 'libx264'
                 '-c:a', 'aac'
+                '-ac:a', '2'
+                '-b:a', '192k'
                 '-movflags', '+faststart'
-                $OutputPath
+                $destinationPath
             )
 
             & $ffmpeg.Source @ffmpegArguments
@@ -424,7 +439,12 @@ function Convert-MkvToMp4 {
                 throw "ffmpeg failed to convert '$($inputFile.FullName)' (exit code $LASTEXITCODE)."
             }
 
-            Get-Item -LiteralPath $OutputPath
+            $outputAudioStreams = @(& $ffprobe.Source -v error -select_streams a -show_entries stream=index -of csv=p=0 $destinationPath)
+            if ($LASTEXITCODE -ne 0 -or $outputAudioStreams.Count -eq 0) {
+                throw "Converted MP4 does not contain a readable audio stream: $destinationPath"
+            }
+
+            Get-Item -LiteralPath $destinationPath
         }
     }
 }
