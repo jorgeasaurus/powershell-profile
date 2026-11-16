@@ -26,7 +26,7 @@ Edit these values in `Microsoft.PowerShell_profile.ps1`:
 
 ```powershell
 $updateInterval = 7
-$OhMyPoshTheme = "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/quick-term.omp.json"
+$OhMyPoshTheme = [IO.Path]::Combine($HOME, ".config", "oh-my-posh", "starbase.omp.json")
 ```
 
 Set light mode for scripts or constrained shells:

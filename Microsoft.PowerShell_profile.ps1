@@ -48,7 +48,11 @@ if (Test-Path ~/Library/CloudStorage/OneDrive-Personal) {
 }
 
 # Oh My Posh theme configuration
-$OhMyPoshTheme = "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/quick-term.omp.json"
+# Prefer a local copy of the theme; fall back to the copy in this repo.
+$OhMyPoshTheme = [IO.Path]::Combine($HOME, '.config', 'oh-my-posh', 'starbase.omp.json')
+if (-not (Test-Path $OhMyPoshTheme)) {
+    $OhMyPoshTheme = "https://raw.githubusercontent.com/jorgeasaurus/powershell-profile/main/starbase.omp.json"
+}
 
 # Default symbol for Get-StockPrice.
 $UserStockSymbol = "SPCX"
