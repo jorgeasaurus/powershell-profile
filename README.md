@@ -37,6 +37,27 @@ $env:PROFILE_LIGHT = "1"
 
 Light mode skips startup update checks and module imports.
 
+## Claude Code status line
+
+`claude.omp.json` renders a Claude Code status line in the starbase palette: path, git status, model, context usage, and session cost.
+
+Copy the theme next to the prompt theme:
+
+```powershell
+Copy-Item ./claude.omp.json (Join-Path $HOME ".config/oh-my-posh/claude.omp.json")
+```
+
+Add the status line to `~/.claude/settings.json`:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "oh-my-posh claude --config ~/.config/oh-my-posh/claude.omp.json"
+  }
+}
+```
+
 ## Commands
 
 Profile management:

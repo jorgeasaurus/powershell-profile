@@ -1,0 +1,59 @@
+{
+  "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
+  "version": 4,
+  "final_space": false,
+  "blocks": [
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "segments": [
+        {
+          "type": "path",
+          "style": "plain",
+          "foreground": "linear-gradient(#00d4ff, #4da3ff, #b48cff)",
+          "options": {
+            "style": "agnoster_short",
+            "max_depth": 4,
+            "home_icon": "~"
+          },
+          "template": "<b>{{ .Path }}</b> "
+        },
+        {
+          "type": "git",
+          "style": "plain",
+          "foreground": "linear-gradient(#ffb454, #ff4d5a)",
+          "foreground_templates": [
+            "{{ if and (not .Working.Changed) (not .Staging.Changed) }}linear-gradient(#3ddc97, #00d4ff){{ end }}"
+          ],
+          "options": {
+            "fetch_status": true,
+            "branch_icon": " "
+          },
+          "template": "{{ .HEAD }}{{ if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .Working.Changed }} ±{{ .Working.String }}{{ end }}{{ if .Staging.Changed }} ✓{{ .Staging.String }}{{ end }}{{ if gt .StashCount 0 }} ⚑{{ .StashCount }}{{ end }} "
+        },
+        {
+          "type": "claude",
+          "style": "plain",
+          "foreground": "#b48cff",
+          "template": "<#4a5568>│</> {{ .Model.DisplayName }} "
+        },
+        {
+          "type": "claude",
+          "style": "plain",
+          "foreground": "#3ddc97",
+          "foreground_templates": [
+            "{{ if gt .TokenUsagePercent 80 }}#ff4d5a{{ end }}",
+            "{{ if gt .TokenUsagePercent 50 }}#ffb454{{ end }}"
+          ],
+          "template": "<#4a5568>│</> {{ .TokenUsagePercent.GaugeUsed }} {{ .TokenUsagePercent }}% "
+        },
+        {
+          "type": "claude",
+          "style": "plain",
+          "foreground": "#ffb454",
+          "template": "<#4a5568>│</> {{ .FormattedCost }}"
+        }
+      ]
+    }
+  ]
+}
