@@ -74,10 +74,16 @@ if ($IsWindows) {
     $env:USERPROFILE = $HOME
 }
 
-$powerShellDocumentsPath = [IO.Path]::Combine($env:USERPROFILE, 'Documents', 'PowerShell')
-$timeFilePath = [IO.Path]::Combine($powerShellDocumentsPath, 'LastExecutionTime.txt')
+# macOS blocks terminals from ~/Documents until the user grants access, which made the
+# update check run on every start. Keep the timestamp beside the profile off Windows.
+$profileStatePath = if ($IsWindows) {
+    [IO.Path]::Combine($env:USERPROFILE, 'Documents', 'PowerShell')
+} else {
+    [IO.Path]::Combine($HOME, '.config', 'powershell')
+}
+$timeFilePath = [IO.Path]::Combine($profileStatePath, 'LastExecutionTime.txt')
 if (-not (Test-Path $timeFilePath)) {
-    New-Item -Path $powerShellDocumentsPath -ItemType Directory -Force | Out-Null
+    New-Item -Path $profileStatePath -ItemType Directory -Force | Out-Null
     (Get-Date -Format 'yyyy-MM-dd') | Out-File -FilePath $timeFilePath -Force
 }
 
