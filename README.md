@@ -85,6 +85,7 @@ Shell helpers:
 ll
 uptime
 Get-PubIP
+Test-PSGalleryReachable
 cpy "text"
 pst
 ```

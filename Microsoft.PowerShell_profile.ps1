@@ -355,6 +355,28 @@ Set-Alias -Name ep -Value Edit-Profile
 # Network Utilities
 function Get-PubIP { (Invoke-WebRequest https://ifconfig.me/ip).Content.Trim() }
 
+function Test-PSGalleryReachable {
+    <#
+    .SYNOPSIS
+        Tests whether the PowerShell Gallery API is reachable and healthy
+    .PARAMETER TimeoutSec
+        Seconds to wait for a response before returning false
+    #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [int]$TimeoutSec = 10
+    )
+
+    try {
+        $null = Invoke-WebRequest -Uri 'https://www.powershellgallery.com/api/v2/' -TimeoutSec $TimeoutSec -ErrorAction Stop
+        $true
+    } catch {
+        Write-Verbose "PSGallery unreachable: $($_.Exception.Message)"
+        $false
+    }
+}
+
 function Convert-MkvToMp4 {
     <#
     .SYNOPSIS
